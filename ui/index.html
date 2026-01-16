@@ -37,24 +37,31 @@
       <section class="board">
         <div class="side" id="boss-side">
           <div class="boss-victory" id="boss-victory">Victory</div>
-          <div class="boss-topbar">
-            <div class="round-info">
-              <div class="round-label">Rounds left</div>
-              <div class="round-value" id="rounds-left">—</div>
+          <div class="boss-header-row">
+            <div class="boss-art">
+              <img src="./assets/boss/toad.png" alt="Boss portrait" />
             </div>
-            <div class="round-info">
-              <div class="round-label">Mana / round</div>
-              <div class="round-value" id="mana-per-round">—</div>
-            </div>
-            <button class="btn end-round" id="end-round">End Round</button>
-          </div>
-          <div class="side-header">
-            <div class="side-title">Boss</div>
-            <div
-              class="stat boss-stat"
-              data-tooltip="Boss health. Reduce to 0 to win."
-            >
-              Health <span id="opponent-health">0</span>
+            <div class="boss-info">
+              <div class="boss-topbar">
+                <div class="round-info">
+                  <div class="round-label">Rounds left</div>
+                  <div class="round-value" id="rounds-left">—</div>
+                </div>
+                <div class="round-info">
+                  <div class="round-label">Mana / round</div>
+                  <div class="round-value" id="mana-per-round">—</div>
+                </div>
+                <button class="btn end-round" id="end-round">End Round</button>
+              </div>
+              <div class="side-header">
+                <div class="side-title">Boss</div>
+                <div
+                  class="stat boss-stat"
+                  data-tooltip="Boss health. Reduce to 0 to win."
+                >
+                  Health <span id="opponent-health">0</span>
+                </div>
+              </div>
             </div>
           </div>
           <div class="board-row" id="opponent-board"></div>

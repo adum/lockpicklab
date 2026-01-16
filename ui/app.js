@@ -335,7 +335,8 @@ function render() {
       Number(totalRounds) - (currentState.turn - 1),
       0
     );
-    elements.roundsLeft.textContent = String(roundsLeft);
+    elements.roundsLeft.textContent =
+      roundsLeft === 1 ? "Final round" : String(roundsLeft);
   } else {
     elements.roundsLeft.textContent = "—";
   }
