@@ -128,6 +128,7 @@ let snapshots = [initialState];
 let actions = [];
 let solutionIndex = 0;
 let autoplayTimer = null;
+let cachedLegalActions = [];
 
 async function loadCardLibrary() {
   try {
@@ -298,6 +299,7 @@ function render() {
 
   renderBoard(elements.opponentBoard, currentState.opponent?.board ?? []);
   renderBoard(elements.playerBoard, currentState.player?.board ?? []);
+  cachedLegalActions = getLegalActions(currentState, cardLibrary);
   renderHand(elements.playerHand, currentState.player?.hand ?? []);
   renderActions();
   renderLog();
@@ -306,12 +308,11 @@ function render() {
 function renderActions() {
   const list = elements.actionList;
   list.innerHTML = "";
-  const actionsList = getLegalActions(currentState, cardLibrary);
-  if (actionsList.length === 0) {
+  if (cachedLegalActions.length === 0) {
     list.innerHTML = '<div class="placeholder">No legal actions.</div>';
     return;
   }
-  actionsList.forEach((action) => {
+  cachedLegalActions.forEach((action) => {
     const row = document.createElement("div");
     row.className = "action-item";
 
@@ -406,33 +407,23 @@ function renderBoard(container, list) {
     const costText = def?.cost ?? "?";
     const powerValue = unit.power ?? def?.stats?.power ?? 0;
 
-    const header = document.createElement("div");
-    header.className = "card-header";
+    const badges = document.createElement("div");
+    badges.className = "card-badges";
+
+    const powerBadge = document.createElement("div");
+    powerBadge.className = `badge ${def?.type === "creature" ? "power" : "spacer"}`;
+    powerBadge.textContent = def?.type === "creature" ? String(powerValue) : "";
+
+    const manaBadge = document.createElement("div");
+    manaBadge.className = "badge mana";
+    manaBadge.textContent = String(costText);
+
+    badges.appendChild(powerBadge);
+    badges.appendChild(manaBadge);
 
     const name = document.createElement("div");
-    name.className = "card-name";
+    name.className = "card-name-line";
     name.textContent = nameText;
-
-    const cost = document.createElement("div");
-    cost.className = "card-cost";
-    cost.textContent = String(costText);
-
-    header.appendChild(name);
-    header.appendChild(cost);
-
-    const power = document.createElement("div");
-    power.className = "card-power";
-
-    const powerNumber = document.createElement("div");
-    powerNumber.className = "power-value";
-    powerNumber.textContent = String(powerValue);
-
-    const powerLabel = document.createElement("div");
-    powerLabel.className = "power-label";
-    powerLabel.textContent = "power";
-
-    power.appendChild(powerNumber);
-    power.appendChild(powerLabel);
 
     const keywords = document.createElement("div");
     keywords.className = "card-keywords";
@@ -454,8 +445,8 @@ function renderBoard(container, list) {
       keywords.appendChild(tag);
     }
 
-    card.appendChild(header);
-    card.appendChild(power);
+    card.appendChild(badges);
+    card.appendChild(name);
     card.appendChild(keywords);
     container.appendChild(card);
   });
@@ -469,9 +460,52 @@ function renderHand(container, hand) {
   }
 
   hand.forEach((cardId) => {
-    const chip = document.createElement("span");
+    const chip = document.createElement("button");
     chip.className = "hand-card";
-    chip.textContent = cardId;
+    const def = cardLibrary.byId?.[cardId];
+    const name = def?.name ?? cardId;
+    const cost = def?.cost ?? "?";
+    const power = def?.stats?.power ?? null;
+
+    const topRow = document.createElement("div");
+    topRow.className = "hand-card-top";
+
+    const powerEl = document.createElement("span");
+    powerEl.className = `hand-badge ${def?.type === "creature" ? "power" : "spacer"}`;
+    powerEl.textContent = def?.type === "creature" ? String(power ?? 0) : "";
+
+    const costEl = document.createElement("span");
+    costEl.className = "hand-badge mana";
+    costEl.textContent = String(cost);
+
+    topRow.appendChild(powerEl);
+    topRow.appendChild(costEl);
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "hand-name";
+    nameEl.textContent = name;
+
+    chip.appendChild(topRow);
+    chip.appendChild(nameEl);
+
+    const playActions = cachedLegalActions.filter(
+      (action) => action.type === "play" && action.card === cardId
+    );
+    chip.disabled = playActions.length === 0;
+    chip.addEventListener("click", () => {
+      if (playActions.length === 0) {
+        setStatus(`Cannot play ${cardId} right now.`, "warn");
+        return;
+      }
+      if (playActions.length === 1) {
+        applyAndRender(playActions[0]);
+        return;
+      }
+      const preferOpponent = playActions.find(
+        (action) => action.target === "opponent"
+      );
+      applyAndRender(preferOpponent ?? playActions[0]);
+    });
     container.appendChild(chip);
   });
 }

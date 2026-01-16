@@ -4,6 +4,8 @@
   --muted: #5b5148;
   --accent: #d46a3a;
   --accent-2: #244a62;
+  --mana: #2d6cdf;
+  --power: #d64545;
   --panel: #fcfbf8;
   --card: #fdf9f2;
   --border: #dccdbb;
@@ -149,10 +151,11 @@ body::after {
 }
 
 .board-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   min-height: 120px;
+  align-items: flex-start;
 }
 
 .divider {
@@ -172,54 +175,45 @@ body::after {
   min-height: 140px;
   position: relative;
   overflow: hidden;
+  width: clamp(140px, 18vw, 190px);
 }
 
-.card-header {
+.card-badges {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
 }
 
-.card-name {
-  font-weight: 600;
-  text-transform: capitalize;
-  font-size: 1rem;
-}
-
-.card-cost {
+.badge {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--accent-2);
-  color: #fffaf0;
   display: grid;
   place-items: center;
   font-size: 0.85rem;
   font-weight: 600;
+  color: #f7fbff;
 }
 
-.card-power {
-  display: grid;
-  place-items: center;
-  gap: 4px;
-  margin: 8px 0;
-  background: rgba(212, 106, 58, 0.1);
-  border-radius: 14px;
-  padding: 10px;
+.badge.mana {
+  background: var(--mana);
 }
 
-.power-value {
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: var(--accent);
+.badge.power {
+  background: var(--power);
 }
 
-.power-label {
-  font-size: 0.7rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
+.badge.spacer {
+  background: transparent;
+  border: 1px dashed rgba(31, 26, 23, 0.2);
+  color: transparent;
+}
+
+.card-name-line {
+  font-weight: 600;
+  text-transform: capitalize;
+  font-size: 1rem;
 }
 
 .card-keywords {
@@ -250,11 +244,58 @@ body::after {
 }
 
 .hand-card {
-  padding: 6px 12px;
-  border-radius: 999px;
+  display: grid;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
   background: rgba(212, 106, 58, 0.15);
   font-size: 0.85rem;
   text-transform: capitalize;
+  border: 1px solid rgba(212, 106, 58, 0.25);
+  cursor: pointer;
+  font-family: inherit;
+  min-width: 110px;
+}
+
+.hand-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.hand-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hand-name {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.hand-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #f7fbff;
+}
+
+.hand-badge.mana {
+  background: var(--mana);
+}
+
+.hand-badge.power {
+  background: var(--power);
+}
+
+.hand-badge.spacer {
+  background: transparent;
+  border: 1px dashed rgba(31, 26, 23, 0.2);
+  color: transparent;
 }
 
 .panel {
