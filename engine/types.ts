@@ -68,6 +68,8 @@ export interface GameState {
   chainCount: number;
   turn: number;
   nextUid: number;
+  manaPerRound: number;
+  targetRounds?: number;
 }
 
 export type PlayAction = {
@@ -99,6 +101,8 @@ export interface Puzzle {
   difficulty: "easy" | "medium" | "hard";
   seed?: number;
   tags?: string[];
+  targetRounds?: number;
+  manaPerRound?: number;
   player: SideState;
   opponent: OpponentState;
   solution?: Action[];

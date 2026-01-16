@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lockpick Lab Rules</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./rules.css" />
+  </head>
+  <body>
+    <header class="rules-hero">
+      <div class="rules-hero-inner">
+        <a class="rules-back" href="./index.html">← Back to the board</a>
+        <h1>Lockpick Lab Rules</h1>
+        <p class="rules-subtitle">
+          Deterministic, single-player puzzles. No randomness, no hidden information.
+        </p>
+      </div>
+    </header>
+
+    <main class="rules-content">
+      <section>
+        <h2>Core Objective</h2>
+        <ul>
+          <li>Reduce the boss health to 0 within the target number of rounds.</li>
+          <li>The boss does not take turns; it is a fixed puzzle state.</li>
+          <li>All information is visible: hands, boards, and effects.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Setup</h2>
+        <ul>
+          <li>Boss health and target rounds are set by the puzzle.</li>
+          <li>You start with a fixed amount of mana and a defined hand.</li>
+          <li>Mana per round is fixed by the puzzle and carries over.</li>
+          <li>Enemy creatures may already be on the board.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Zones</h2>
+        <ul>
+          <li>Player board: your creatures in play.</li>
+          <li>Enemy board: boss creatures in play.</li>
+          <li>Hand: cards available to play this turn.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Resources</h2>
+        <ul>
+          <li><strong>Mana</strong> pays the cost of playing cards.</li>
+          <li>Mana carries over between rounds.</li>
+          <li><strong>Power</strong> is the single combat stat. It is both damage and resilience.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Card Types</h2>
+        <ul>
+          <li><strong>Creatures</strong> enter the board and can attack once per round.</li>
+          <li><strong>Spells</strong> resolve instantly and then leave play.</li>
+          <li><strong>Effects</strong> stay on the battlefield and modify rules.</li>
+          <li><strong>Mods</strong> attach to a creature and modify its attributes.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Actions & Turn Flow</h2>
+        <ul>
+          <li>You may take any number of actions in any order until you end the round.</li>
+          <li>Creatures can attack once per round, then become tired.</li>
+          <li>At end of round, all tired creatures become rested.</li>
+          <li>Mana refills according to the puzzle setup.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Combat Rules</h2>
+        <ul>
+          <li>If the boss has any creatures on the board, you must attack a creature.</li>
+          <li>If there are no enemy creatures, you may attack the boss directly.</li>
+          <li>When a creature attacks another creature, both deal their power simultaneously.</li>
+          <li>Any creature reduced to 0 power is destroyed.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Keywords & Mechanics</h2>
+        <div class="rules-grid">
+          <div class="rules-card">
+            <h3>Guard</h3>
+            <p>While a Guard creature exists, you must attack a Guard first.</p>
+          </div>
+          <div class="rules-card">
+            <h3>Rush</h3>
+            <p>Can attack enemy creatures immediately on the turn it is played.</p>
+          </div>
+          <div class="rules-card">
+            <h3>Storm</h3>
+            <p>Can attack any target immediately on the turn it is played.</p>
+          </div>
+          <div class="rules-card">
+            <h3>Pierce</h3>
+            <p>Excess power from a creature attack spills over to the boss.</p>
+          </div>
+          <div class="rules-card">
+            <h3>Chain</h3>
+            <p>Triggers a bonus effect if you have already played a card this round.</p>
+          </div>
+          <div class="rules-card">
+            <h3>Sacrifice</h3>
+            <p>Destroy a friendly creature to trigger an effect.</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Determinism</h2>
+        <ul>
+          <li>No randomness. No hidden information. Every puzzle is fully knowable.</li>
+          <li>Identical actions always result in identical outcomes.</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

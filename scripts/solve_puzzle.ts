@@ -19,6 +19,8 @@ const cards = loadCardLibrary(cardsPath);
 const state = normalizeState({
   player: puzzle.player,
   opponent: puzzle.opponent,
+  manaPerRound: puzzle.manaPerRound,
+  targetRounds: puzzle.targetRounds,
 });
 
 const result = solve(state, cards, { maxDepth: 8, maxWins: 3 });

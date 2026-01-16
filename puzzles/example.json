@@ -3,6 +3,8 @@
   "difficulty": "hard",
   "seed": 8842,
   "tags": ["guard", "pierce", "sacrifice"],
+  "targetRounds": 2,
+  "manaPerRound": 2,
   "player": {
     "mana": 5,
     "hand": ["cultist", "lancer", "fireball", "spark"],

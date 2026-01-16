@@ -23,6 +23,14 @@
       "items": {"type": "string"},
       "default": []
     },
+    "targetRounds": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "manaPerRound": {
+      "type": "integer",
+      "minimum": 0
+    },
     "player": {"$ref": "#/$defs/sideState"},
     "opponent": {"$ref": "#/$defs/opponentState"},
     "solution": {

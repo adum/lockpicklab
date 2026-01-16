@@ -66,6 +66,8 @@ const defaultPuzzle = {
   difficulty: "hard",
   seed: 8842,
   tags: ["guard", "pierce", "sacrifice"],
+  targetRounds: 2,
+  manaPerRound: 2,
   player: {
     mana: 5,
     hand: ["cultist", "lancer", "fireball", "spark"],
@@ -115,6 +117,9 @@ const elements = {
   undoAction: document.getElementById("undo-action"),
   stepSolution: document.getElementById("step-solution"),
   playSolution: document.getElementById("play-solution"),
+  roundsLeft: document.getElementById("rounds-left"),
+  manaPerRound: document.getElementById("mana-per-round"),
+  endRound: document.getElementById("end-round"),
 };
 
 let cardLibrary = buildCardLibrary(fallbackCards);
@@ -122,6 +127,8 @@ let currentPuzzle = structuredClone(defaultPuzzle);
 let initialState = normalizeState({
   player: currentPuzzle.player,
   opponent: currentPuzzle.opponent,
+  manaPerRound: currentPuzzle.manaPerRound ?? 0,
+  targetRounds: currentPuzzle.targetRounds,
 });
 let currentState = initialState;
 let snapshots = [initialState];
@@ -129,6 +136,18 @@ let actions = [];
 let solutionIndex = 0;
 let autoplayTimer = null;
 let cachedLegalActions = [];
+let pendingAttackSource = null;
+let damageFlash = { creatures: new Set(), boss: false };
+const KEYWORD_TOOLTIPS = {
+  guard: "Guard: must be attacked before non-Guard targets.",
+  rush: "Rush: can attack enemy creatures immediately.",
+  storm: "Storm: can attack any target immediately.",
+  pierce: "Pierce: excess power hits the boss.",
+  chain: "Chain: bonus effect if a card was already played this round.",
+  sacrifice: "Sacrifice: destroy a friendly creature to trigger an effect.",
+  tired: "Tired: this creature already attacked this round.",
+  vanilla: "No special abilities.",
+};
 
 async function loadCardLibrary() {
   try {
@@ -148,11 +167,15 @@ function resetState() {
   initialState = normalizeState({
     player: currentPuzzle.player,
     opponent: currentPuzzle.opponent,
+    manaPerRound: currentPuzzle.manaPerRound ?? 0,
+    targetRounds: currentPuzzle.targetRounds,
   });
   currentState = initialState;
   snapshots = [initialState];
   actions = [];
   solutionIndex = 0;
+  pendingAttackSource = null;
+  damageFlash = { creatures: new Set(), boss: false };
   stopAutoplay();
   render();
   setStatus("State reset.");
@@ -220,6 +243,10 @@ elements.undoAction.addEventListener("click", () => {
   render();
 });
 
+elements.endRound.addEventListener("click", () => {
+  applyAndRender({ type: "end" });
+});
+
 elements.stepSolution.addEventListener("click", () => {
   stepSolution();
 });
@@ -259,10 +286,13 @@ function stepSolution() {
 
 function applyAndRender(action, isSolutionStep = false) {
   try {
+    const prev = currentState;
     const next = applyAction(currentState, action, cardLibrary);
+    damageFlash = computeDamageFlash(prev, next);
     currentState = next;
     snapshots.push(next);
     actions.push(action);
+    pendingAttackSource = null;
     if (isSolutionStep) {
       solutionIndex += 1;
     }
@@ -297,22 +327,65 @@ function render() {
   elements.opponentHealth.textContent = currentState.opponent?.health ?? 0;
   elements.playerMana.textContent = currentState.player?.mana ?? 0;
 
-  renderBoard(elements.opponentBoard, currentState.opponent?.board ?? []);
-  renderBoard(elements.playerBoard, currentState.player?.board ?? []);
+  const totalRoundsRaw = currentState.targetRounds ?? currentPuzzle.targetRounds;
+  const totalRounds =
+    typeof totalRoundsRaw === "number" ? totalRoundsRaw : Number(totalRoundsRaw);
+  if (Number.isFinite(totalRounds)) {
+    const roundsLeft = Math.max(
+      Number(totalRounds) - (currentState.turn - 1),
+      0
+    );
+    elements.roundsLeft.textContent = String(roundsLeft);
+  } else {
+    elements.roundsLeft.textContent = "—";
+  }
+
+  const perRoundRaw =
+    currentState.manaPerRound ?? currentPuzzle.manaPerRound ?? null;
+  const perRound =
+    typeof perRoundRaw === "number" ? perRoundRaw : Number(perRoundRaw);
+  elements.manaPerRound.textContent =
+    perRoundRaw === null || Number.isNaN(perRound) ? "—" : `+${perRound}`;
+
   cachedLegalActions = getLegalActions(currentState, cardLibrary);
+  if (
+    pendingAttackSource &&
+    !cachedLegalActions.some(
+      (action) =>
+        action.type === "attack" && action.source === pendingAttackSource
+    )
+  ) {
+    pendingAttackSource = null;
+  }
+
+  renderBoard(elements.opponentBoard, currentState.opponent?.board ?? [], "opponent");
+  renderBoard(elements.playerBoard, currentState.player?.board ?? [], "player");
   renderHand(elements.playerHand, currentState.player?.hand ?? []);
   renderActions();
   renderLog();
+
+  if (damageFlash.boss) {
+    triggerBossFlash();
+  }
+  damageFlash = { creatures: new Set(), boss: false };
+
+  const victoryBanner = document.getElementById("boss-victory");
+  if (victoryBanner) {
+    victoryBanner.classList.toggle("visible", isWin(currentState));
+  }
 }
 
 function renderActions() {
   const list = elements.actionList;
   list.innerHTML = "";
-  if (cachedLegalActions.length === 0) {
+  const visibleActions = cachedLegalActions.filter(
+    (action) => action.type !== "end"
+  );
+  if (visibleActions.length === 0) {
     list.innerHTML = '<div class="placeholder">No legal actions.</div>';
     return;
   }
-  cachedLegalActions.forEach((action) => {
+  visibleActions.forEach((action) => {
     const row = document.createElement("div");
     row.className = "action-item";
 
@@ -356,7 +429,7 @@ function formatAction(action, state) {
     case "activate":
       return `Activate ${describeRef(action.source, state)} -> ${describeRef(action.target, state)}`;
     case "end":
-      return "End turn";
+      return "End round";
     default:
       return "Unknown action";
   }
@@ -390,7 +463,7 @@ function describeRef(ref, state) {
   return ref;
 }
 
-function renderBoard(container, list) {
+function renderBoard(container, list, side) {
   container.innerHTML = "";
   if (!Array.isArray(list) || list.length === 0) {
     container.innerHTML =
@@ -398,21 +471,31 @@ function renderBoard(container, list) {
     return;
   }
 
-  list.forEach((unit) => {
+  list.forEach((unit, index) => {
     const card = document.createElement("div");
     card.className = "card";
+    if (unit.uid && damageFlash.creatures.has(unit.uid)) {
+      card.classList.add("damage-flash");
+    }
 
     const def = cardLibrary.byId?.[unit.card];
+    if (def?.type) {
+      card.classList.add(`type-${def.type}`);
+    }
     const nameText = def?.name ?? unit.card ?? "unknown";
     const costText = def?.cost ?? "?";
     const powerValue = unit.power ?? def?.stats?.power ?? 0;
+    const isCreature = def?.type === "creature";
 
     const badges = document.createElement("div");
     badges.className = "card-badges";
 
     const powerBadge = document.createElement("div");
-    powerBadge.className = `badge ${def?.type === "creature" ? "power" : "spacer"}`;
-    powerBadge.textContent = def?.type === "creature" ? String(powerValue) : "";
+    powerBadge.className = `badge ${isCreature ? "power" : "spacer"}`;
+    powerBadge.textContent = isCreature ? String(powerValue) : "";
+    if (side === "opponent" && isCreature) {
+      powerBadge.dataset.tooltip = "Boss creature power (damage and resilience).";
+    }
 
     const manaBadge = document.createElement("div");
     manaBadge.className = "badge mana";
@@ -425,6 +508,16 @@ function renderBoard(container, list) {
     name.className = "card-name-line";
     name.textContent = nameText;
 
+    let desc = null;
+    if (def?.type === "spell") {
+      const descText = formatSpellDescription(def);
+      if (descText) {
+        desc = document.createElement("div");
+        desc.className = "card-desc";
+        desc.textContent = descText;
+      }
+    }
+
     const keywords = document.createElement("div");
     keywords.className = "card-keywords";
     const tags = Array.isArray(unit.keywords) ? [...unit.keywords] : [];
@@ -436,18 +529,74 @@ function renderBoard(container, list) {
         const tag = document.createElement("span");
         tag.className = "tag";
         tag.textContent = kw;
+        const tooltip = KEYWORD_TOOLTIPS[kw];
+        if (tooltip) {
+          tag.dataset.tooltip = tooltip;
+        }
         keywords.appendChild(tag);
       });
     } else {
       const tag = document.createElement("span");
       tag.className = "tag";
       tag.textContent = "vanilla";
+      tag.dataset.tooltip = KEYWORD_TOOLTIPS.vanilla;
       keywords.appendChild(tag);
     }
 
     card.appendChild(badges);
     card.appendChild(name);
+    if (desc) {
+      card.appendChild(desc);
+    }
     card.appendChild(keywords);
+
+    if (side === "player" && isCreature) {
+      const sourceRef = unit.uid ?? `player:slot${index}`;
+      const attackActions = cachedLegalActions.filter(
+        (action) => action.type === "attack" && action.source === sourceRef
+      );
+
+      const actionsRow = document.createElement("div");
+      actionsRow.className = "card-actions";
+
+      const attackButton = document.createElement("button");
+      attackButton.className = "attack-button";
+      attackButton.title = "Attack";
+      attackButton.disabled = attackActions.length === 0;
+      attackButton.innerHTML =
+        '<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M14.4 3.6l6 6-2.1 2.1-1.4-1.4-4.4 4.4 1.4 1.4-2.1 2.1-1.4-1.4-6 6-1.9-1.9 6-6-1.4-1.4 2.1-2.1 1.4 1.4 4.4-4.4-1.4-1.4 2.1-2.1z\" fill=\"currentColor\"/></svg>';
+      attackButton.addEventListener("click", () => {
+        if (attackActions.length === 0) {
+          setStatus("No legal attacks for that creature.", "warn");
+          return;
+        }
+        if (attackActions.length === 1) {
+          applyAndRender(attackActions[0]);
+          return;
+        }
+        pendingAttackSource =
+          pendingAttackSource === sourceRef ? null : sourceRef;
+        render();
+      });
+
+      actionsRow.appendChild(attackButton);
+      card.appendChild(actionsRow);
+
+      if (pendingAttackSource === sourceRef && attackActions.length > 1) {
+        const targetsRow = document.createElement("div");
+        targetsRow.className = "attack-targets";
+        attackActions.forEach((action) => {
+          const targetBtn = document.createElement("button");
+          targetBtn.className = "target-button";
+          targetBtn.textContent = describeRef(action.target, currentState);
+          targetBtn.addEventListener("click", () => {
+            applyAndRender(action);
+          });
+          targetsRow.appendChild(targetBtn);
+        });
+        card.appendChild(targetsRow);
+      }
+    }
     container.appendChild(card);
   });
 }
@@ -463,6 +612,9 @@ function renderHand(container, hand) {
     const chip = document.createElement("button");
     chip.className = "hand-card";
     const def = cardLibrary.byId?.[cardId];
+    if (def?.type) {
+      chip.classList.add(`type-${def.type}`);
+    }
     const name = def?.name ?? cardId;
     const cost = def?.cost ?? "?";
     const power = def?.stats?.power ?? null;
@@ -488,6 +640,32 @@ function renderHand(container, hand) {
     chip.appendChild(topRow);
     chip.appendChild(nameEl);
 
+    if (def?.type === "spell") {
+      const descText = formatSpellDescription(def);
+      if (descText) {
+        const descEl = document.createElement("div");
+        descEl.className = "hand-desc";
+        descEl.textContent = descText;
+        chip.appendChild(descEl);
+      }
+    }
+
+    if (def?.type === "creature" && Array.isArray(def.keywords) && def.keywords.length > 0) {
+      const keywords = document.createElement("div");
+      keywords.className = "hand-keywords";
+      def.keywords.forEach((kw) => {
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = kw;
+        const tooltip = KEYWORD_TOOLTIPS[kw];
+        if (tooltip) {
+          tag.dataset.tooltip = tooltip;
+        }
+        keywords.appendChild(tag);
+      });
+      chip.appendChild(keywords);
+    }
+
     const playActions = cachedLegalActions.filter(
       (action) => action.type === "play" && action.card === cardId
     );
@@ -508,6 +686,65 @@ function renderHand(container, hand) {
     });
     container.appendChild(chip);
   });
+}
+
+function computeDamageFlash(prev, next) {
+  const creatures = new Set();
+  const prevMap = collectPowerMap(prev);
+  const nextMap = collectPowerMap(next);
+
+  nextMap.forEach((power, uid) => {
+    const prevPower = prevMap.get(uid);
+    if (prevPower !== undefined && power < prevPower) {
+      creatures.add(uid);
+    }
+  });
+
+  const boss = next.opponent.health < prev.opponent.health;
+  return { creatures, boss };
+}
+
+function collectPowerMap(state) {
+  const map = new Map();
+  state.player.board.forEach((unit) => {
+    if (unit.uid) {
+      map.set(unit.uid, unit.power);
+    }
+  });
+  state.opponent.board.forEach((unit) => {
+    if (unit.uid) {
+      map.set(unit.uid, unit.power);
+    }
+  });
+  return map;
+}
+
+function triggerBossFlash() {
+  const badge = elements.opponentHealth.closest(".boss-stat");
+  if (!badge) {
+    return;
+  }
+  badge.classList.remove("boss-flash");
+  void badge.offsetWidth;
+  badge.classList.add("boss-flash");
+}
+
+function formatSpellDescription(def) {
+  if (!def?.effects || def.effects.length === 0) {
+    return "";
+  }
+  const parts = [];
+  def.effects.forEach((effect) => {
+    if (effect.type === "damage") {
+      const chain = effect.chain_amount ? ` (Chain ${effect.chain_amount})` : "";
+      parts.push(`Deal ${effect.amount} dmg${chain}`);
+      return;
+    }
+    if (effect.type === "buff") {
+      parts.push(`Give +${effect.amount} power`);
+    }
+  });
+  return parts.join("; ");
 }
 
 loadCardLibrary().then(() => {

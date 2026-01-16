@@ -37,6 +37,8 @@ export function cloneState(state: GameState): GameState {
     chainCount: state.chainCount,
     turn: state.turn,
     nextUid: state.nextUid,
+    manaPerRound: state.manaPerRound,
+    targetRounds: state.targetRounds,
   };
 }
 
@@ -59,6 +61,8 @@ export function normalizeState(input: {
   chainCount?: number;
   turn?: number;
   nextUid?: number;
+  manaPerRound?: number;
+  targetRounds?: number;
 }): GameState {
   const nextUidRef = { value: input.nextUid ?? 1 };
   const player = cloneSide(input.player);
@@ -73,5 +77,7 @@ export function normalizeState(input: {
     chainCount: input.chainCount ?? 0,
     turn: input.turn ?? 1,
     nextUid: nextUidRef.value,
+    manaPerRound: input.manaPerRound ?? 0,
+    targetRounds: input.targetRounds,
   };
 }

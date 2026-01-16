@@ -196,10 +196,11 @@ function applyAttack(state: GameState, action: AttackAction, cards: CardLibrary)
 
   const guardIndexes = enemyGuardIndexes(state);
   const mustHitGuard = guardIndexes.length > 0;
+  const hasEnemyMinions = state.opponent.board.length > 0;
 
   if (action.target === "opponent") {
-    if (mustHitGuard) {
-      throw new Error("Guard is present; cannot attack opponent");
+    if (hasEnemyMinions) {
+      throw new Error("Enemy minions are present; cannot attack opponent");
     }
     applyDamageToOpponent(state, attacker.power);
     attacker.tired = true;
@@ -281,13 +282,14 @@ function applyEnd(state: GameState): GameState {
   });
   state.chainCount = 0;
   state.turn += 1;
+  state.player.mana += state.manaPerRound;
   return state;
 }
 
 export function getLegalActions(state: GameState, cards: CardLibrary): Action[] {
   const actions: Action[] = [];
   const guardIndexes = enemyGuardIndexes(state);
-  const canHitOpponent = guardIndexes.length === 0;
+  const canHitOpponent = state.opponent.board.length === 0;
 
   for (const cardId of state.player.hand) {
     const def = cards.byId[cardId];
@@ -341,5 +343,6 @@ export function getLegalActions(state: GameState, cards: CardLibrary): Action[] 
     }
   });
 
+  actions.push({ type: "end" });
   return actions;
 }
