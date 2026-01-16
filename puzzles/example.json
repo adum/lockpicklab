@@ -1,0 +1,32 @@
+{
+  "id": "puzzle_0001",
+  "difficulty": "hard",
+  "seed": 8842,
+  "tags": ["guard", "pierce", "sacrifice"],
+  "player": {
+    "mana": 5,
+    "hand": ["cultist", "lancer", "fireball", "spark"],
+    "board": []
+  },
+  "opponent": {
+    "health": 6,
+    "board": [
+      {
+        "card": "iron_golem",
+        "power": 3,
+        "keywords": ["guard"],
+        "tired": false
+      }
+    ]
+  },
+  "solution": [
+    {"type": "play", "card": "cultist"},
+    {"type": "play", "card": "lancer"},
+    {"type": "activate", "source": "cultist", "target": "lancer"},
+    {"type": "attack", "source": "lancer", "target": "opponent:slot0"}
+  ],
+  "metadata": {
+    "version": 1,
+    "description": "Cultist buffs Lancer to 9 power; piercing a 3 power guard deals 6 to face."
+  }
+}

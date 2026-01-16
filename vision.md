@@ -20,8 +20,8 @@ You write a script that plays your game in "God Mode" with infinite resources.
 
 * **Step A: The Ghost Walk**
 The script starts with an empty board and plays a random sequence of valid cards from your library.
-* *Action 1:* Summon "Goblin" (2 Mana, 2 Attack).
-* *Action 2:* Cast "Mutate" on Goblin (1 Mana, +3 Attack).
+* *Action 1:* Summon "Goblin" (2 Mana, 2 Power).
+* *Action 2:* Cast "Mutate" on Goblin (1 Mana, +3 Power).
 * *Action 3:* Attack with Goblin (Deals 5 Damage).
 * *Trace:* The script records that this sequence cost **3 Mana** and dealt **5 Damage**.
 
@@ -39,7 +39,7 @@ Right now, the puzzle is trivial because the player holds *only* the winning car
 * *Example:* Add a "Fireball" (Deals 6 damage, Costs 4 Mana).
 
 
-* *The Trap:* The player sees "6 Damage" (which is enough to kill the 5 HP enemy) and fixates on it. They will waste time trying to find 1 extra mana to cast it, not realizing the actual solution is the smaller Goblin combo.
+* *The Trap:* The player sees "6 Damage" (which is enough to kill the 5 health boss) and fixates on it. They will waste time trying to find 1 extra mana to cast it, not realizing the actual solution is the smaller Goblin combo.
 
 
 
@@ -62,7 +62,7 @@ Here are three mechanics that make procedural puzzles much harder to solve:
 
 * *Mechanic:* You can only have 5 creatures on the board.
 * *Puzzle Logic:* The generator creates a winning line that requires summoning a 6th creature (e.g., a charger).
-* *The Solution:* The player must figure out how to **kill their own creature** first (perhaps by attacking a high-attack enemy minion) to free up space.
+* *The Solution:* The player must figure out how to **kill their own creature** first (perhaps by attacking a high-power enemy minion) to free up space.
 
 **2. State-Based Triggers**
 
@@ -108,20 +108,19 @@ Here is a comprehensive Design Document for **"Project Lockpick,"** a procedural
 
 * **The Hero:**
 * **Player:** Has Mana (Resource). Health is irrelevant (you only need to survive the turn).
-* **Enemy:** Has Health (HP). **Goal:** Reduce Enemy HP to 0.
+* **Enemy:** Has Health. **Goal:** Reduce Enemy Health to 0.
 
 
 
 ### 2.2 Resources
 
 * **Mana:** Refills to a fixed cap (set by the puzzle) at the start of the turn. Used to play cards.
-* **Attack (ATK):** Damage dealt to targets.
-* **Health (HP):** Damage capacity.
+* **Power:** Damage dealt to targets and resilience in combat.
 
 ### 2.3 Combat Logic
 
 * **The Guard Rule:** If an enemy has **Guard**, the Player cannot attack the Enemy Hero or non-Guard minions.
-* **Retaliation:** When a minion attacks another minion, they deal their ATK damage to each other simultaneously.
+* **Retaliation:** When a minion attacks another minion, they deal their Power damage to each other simultaneously.
 * **Exhaustion:** Minions cannot attack the turn they are played unless they have **Rush**.
 
 ---
@@ -142,9 +141,9 @@ To create "Hard" puzzles, we use mechanics that enforce **Order of Operations** 
 ### 3.2 Sample Card Library
 
 * **Spark:** (1 Mana) Deal 2 Damage. **Chain:** Deal 4 instead.
-* **Cultist:** (1 Mana, 1/1) **Sacrifice:** Give a friendly minion +4 Attack.
-* **Ox:** (3 Mana, 2/5) **Guard**.
-* **Lancer:** (4 Mana, 5/2) **Pierce**, **Rush**.
+* **Cultist:** (1 Mana, Power 1) **Sacrifice:** Give a friendly minion +4 Power.
+* **Ox:** (3 Mana, Power 5) **Guard**.
+* **Lancer:** (4 Mana, Power 5) **Pierce**, **Rush**.
 
 ---
 
@@ -160,7 +159,7 @@ The script selects 3-6 random cards from the library and plays them in a random 
 * *Trace Log:*
 1. Played **Cultist** (Index 0).
 2. Played **Lancer** (Index 1).
-3. Used **Cultist** ability (Sacrifice Self) -> Target **Lancer**. (Lancer is now 9/2).
+3. Used **Cultist** ability (Sacrifice Self) -> Target **Lancer**. (Lancer is now Power 9).
 4. **Lancer** attacks **Empty Enemy Slot 0**. (Overkill: 9 damage).
 5. **Lancer** attacks **Enemy Hero**. (Wait, Lancer can't attack twice? *Correction: The script only allows valid moves. If Lancer had "Windfury", it could. Let's assume Lancer attacked Slot 0).*
 
@@ -174,13 +173,13 @@ We analyze the *Trace Log* to build the Enemy Board and constraints.
 * The Ghost attacked **Empty Slot 0** with 9 damage.
 * *Logic:* Why did the Ghost do that? There must have been a threat.
 * *Action:* Place an Enemy Minion in Slot 0. Give it **Guard**.
-* *Stats:* We want the player to utilize **Pierce**. So we give the enemy minion **3 HP**.
-* *Result:* 9 Attack vs 3 HP = 6 Damage Pierces to Face.
+* *Stats:* We want the player to utilize **Pierce**. So we give the enemy minion **3 Power**.
+* *Result:* 9 Power vs 3 Power = 6 Damage Pierces to Face.
 
 
 2. **Set Resources:**
 * **Mana:** The Ghost spent 5 Mana (1 for Cultist + 4 for Lancer). Set Player Mana to **5**.
-* **Enemy HP:** The Ghost dealt 6 damage to the "Face" (via Pierce). Set Enemy Hero HP to **6**.
+* **Enemy Health:** The Ghost dealt 6 damage to the "Face" (via Pierce). Set Enemy Hero Health to **6**.
 
 
 3. **Set Hand:**
@@ -195,11 +194,11 @@ Currently, the puzzle is solvable but obvious. We must add **Noise** that looks 
 1. **Decoy Cards:** Fill the player's hand with unused cards.
 * *Selection Algorithm:* Pick cards that match the Mana Curve but fail the math.
 * *Example:* Add **Fireball** (4 Mana, Deal 6 Damage).
-* *The Trap:* The Enemy HP is 6. The Player sees Fireball (Deal 6) and thinks, "Easy! I just cast Fireball."
+* *The Trap:* The Enemy Health is 6. The Player sees Fireball (Deal 6) and thinks, "Easy! I just cast Fireball."
 * *The Catch:* The Enemy Minion has **Guard**. The player must kill the Guard first. Fireball costs 4, leaving 1 Mana. Can they kill the Guard with 1 Mana? No. The Fireball is a trap. The true solution is the Cultist/Lancer combo.
 
 
-2. **Decoy Board State:** Add non-Guard enemies that look scary (high Attack) but are irrelevant to the lethal solution, distracting the player.
+2. **Decoy Board State:** Add non-Guard enemies that look scary (high Power) but are irrelevant to the lethal solution, distracting the player.
 
 ### Step 4: The Validator (Brute Force)
 
@@ -258,9 +257,9 @@ The script should output a JSON string that your game client reads to load the l
     "board": []
   },
   "opponent": {
-    "hp": 6,
+    "health": 6,
     "board": [
-      {"name": "Iron Golem", "hp": 3, "atk": 2, "abilities": ["Guard"]}
+      {"name": "Iron Golem", "power": 3, "abilities": ["Guard"]}
     ]
   }
 }

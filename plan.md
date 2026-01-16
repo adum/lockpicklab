@@ -29,14 +29,14 @@
 ## Data Model (Core)
 - `Card`: id, name, cost, type, stats, keywords, effects.
 - `Effect`: trigger, condition, action, target rules, resolve order.
-- `State`: player mana/hand/board, enemy hp/board, stack/queue, turn flags.
+- `State`: player mana/hand/board, enemy health/board, stack/queue, turn flags.
 - `Action`: play card, activate ability, attack target.
 - `Puzzle`: metadata + initial `State` + solution trace (optional).
 
 ## Puzzle JSON Schema (Minimum)
 - `id`, `difficulty`, `seed`, `tags`.
 - `player`: `mana`, `hand`
-- `opponent`: `hp`, `board`.
+- `opponent`: `health`, `board`.
 - `solution`: optional ordered list of actions (for playback and regression).
 
 ## Generator Pipeline
@@ -46,7 +46,7 @@
    - Record full action trace and derived outcomes (mana spent, damage dealt).
 2) **Materialize (Paint Target)**
    - Set player mana to exact spend.
-   - Set enemy hp to exact lethal from trace.
+   - Set enemy health to exact lethal from trace.
    - Place used cards into hand/board as required by trace.
    - Populate enemy board to justify attacks (guards, blockers, pierce math).
 3) **Obfuscate**
@@ -68,7 +68,7 @@
 ## Web UI (Testing + Playback)
 ### Core Features
 - **Puzzle Browser**: list, search, tags, difficulty, seed; load from JSON.
-- **Board View**: player board, enemy board, boss HP, mana, hand.
+- **Board View**: player board, enemy board, boss health, mana, hand.
 - **Action Panel**: legal moves, card details, and tooltips.
 - **Playback Controls**: play/pause, step forward/back, speed, jump to step.
 - **Timeline**: action list with timestamps and state diffs on hover.

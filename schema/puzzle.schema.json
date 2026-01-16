@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/schema/puzzle.schema.json",
+  "title": "Puzzle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "difficulty", "player", "opponent"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": ["easy", "medium", "hard"]
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tags": {
+      "type": "array",
+      "items": {"type": "string"},
+      "default": []
+    },
+    "player": {"$ref": "#/$defs/sideState"},
+    "opponent": {"$ref": "#/$defs/opponentState"},
+    "solution": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/action"}
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "sideState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mana", "hand", "board"],
+      "properties": {
+        "mana": {"type": "integer", "minimum": 0},
+        "hand": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": []
+        },
+        "board": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/cardInstance"},
+          "default": []
+        },
+        "deck": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": []
+        },
+        "graveyard": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": []
+        }
+      }
+    },
+    "opponentState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["health", "board"],
+      "properties": {
+        "health": {"type": "integer", "minimum": 0},
+        "board": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/cardInstance"},
+          "default": []
+        },
+        "deck": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": []
+        },
+        "graveyard": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": []
+        }
+      }
+    },
+    "cardInstance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["card", "power"],
+      "properties": {
+        "uid": {"type": "string"},
+        "card": {"type": "string"},
+        "power": {"type": "integer", "minimum": 0},
+        "keywords": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": []
+        },
+        "mods": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": []
+        },
+        "tired": {"type": "boolean", "default": false}
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {"type": "string"},
+        "card": {"type": "string"},
+        "source": {"type": "string"},
+        "target": {"type": "string"},
+        "params": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

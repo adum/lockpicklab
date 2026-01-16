@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "cards": [
+    {
+      "id": "spark",
+      "name": "Spark",
+      "type": "spell",
+      "cost": 1,
+      "keywords": ["chain"],
+      "effects": [
+        {"type": "damage", "amount": 2, "chain_amount": 4}
+      ]
+    },
+    {
+      "id": "cultist",
+      "name": "Cultist",
+      "type": "creature",
+      "cost": 1,
+      "stats": {"power": 1},
+      "keywords": ["sacrifice"],
+      "effects": [
+        {"type": "buff", "stat": "power", "amount": 4, "requires": "sacrifice_self"}
+      ]
+    },
+    {
+      "id": "ox",
+      "name": "Ox",
+      "type": "creature",
+      "cost": 3,
+      "stats": {"power": 5},
+      "keywords": ["guard"]
+    },
+    {
+      "id": "lancer",
+      "name": "Lancer",
+      "type": "creature",
+      "cost": 4,
+      "stats": {"power": 5},
+      "keywords": ["pierce", "rush"]
+    },
+    {
+      "id": "fireball",
+      "name": "Fireball",
+      "type": "spell",
+      "cost": 4,
+      "effects": [
+        {"type": "damage", "amount": 6}
+      ]
+    },
+    {
+      "id": "iron_golem",
+      "name": "Iron Golem",
+      "type": "creature",
+      "cost": 2,
+      "stats": {"power": 3},
+      "keywords": ["guard"]
+    }
+  ]
+}

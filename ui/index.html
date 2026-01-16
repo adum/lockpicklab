@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lockpick Lab</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <span class="brand-mark">LP</span>
+        <div>
+          <div class="brand-title">Lockpick Lab</div>
+          <div class="brand-subtitle">Puzzle board + playback sandbox</div>
+        </div>
+      </div>
+      <div class="meta" id="puzzle-meta">
+        <div class="meta-row">
+          <span class="meta-label">Puzzle</span>
+          <span class="meta-value" id="puzzle-id">—</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-label">Difficulty</span>
+          <span class="meta-value" id="puzzle-difficulty">—</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-label">Tags</span>
+          <span class="meta-value" id="puzzle-tags">—</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="board">
+        <div class="side">
+          <div class="side-header">
+            <div class="side-title">Opponent</div>
+            <div class="stat">Health <span id="opponent-health">0</span></div>
+          </div>
+          <div class="board-row" id="opponent-board"></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="side">
+          <div class="side-header">
+            <div class="side-title">Player</div>
+            <div class="stat">Mana <span id="player-mana">0</span></div>
+          </div>
+          <div class="board-row" id="player-board"></div>
+          <div class="hand" id="player-hand"></div>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Puzzle Loader</div>
+            <div class="panel-subtitle">Paste JSON, or load a file.</div>
+          </div>
+          <div class="panel-actions">
+            <button class="btn" id="load-example">Load example</button>
+            <label class="btn ghost" for="file-input">Choose file</label>
+            <input id="file-input" type="file" accept="application/json" />
+          </div>
+        </div>
+        <textarea id="puzzle-json" spellcheck="false"></textarea>
+        <div class="panel-footer">
+          <button class="btn primary" id="parse-json">Parse JSON</button>
+          <div class="status" id="status">Ready.</div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Legal Actions</div>
+          <div class="action-list" id="action-list"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Playback</div>
+          <div class="playback-controls">
+            <button class="btn ghost" id="reset-state">Reset</button>
+            <button class="btn ghost" id="undo-action">Undo</button>
+            <button class="btn" id="step-solution">Step solution</button>
+            <button class="btn primary" id="play-solution">Auto play</button>
+          </div>
+          <div class="log" id="action-log"></div>
+        </div>
+      </aside>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
