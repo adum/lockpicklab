@@ -125,6 +125,15 @@ const elements = {
   endRound: document.getElementById("end-round"),
   panel: document.getElementById("puzzle-panel"),
   panelToggle: document.getElementById("panel-toggle"),
+  genSeed: document.getElementById("gen-seed"),
+  genSeedRandom: document.getElementById("gen-seed-random"),
+  genSteps: document.getElementById("gen-steps"),
+  genHand: document.getElementById("gen-hand"),
+  genMana: document.getElementById("gen-mana"),
+  genDecoys: document.getElementById("gen-decoys"),
+  genRounds: document.getElementById("gen-rounds"),
+  genManaRound: document.getElementById("gen-mana-round"),
+  genRun: document.getElementById("gen-run"),
 };
 
 const PUZZLE_LIBRARY = [
@@ -149,6 +158,30 @@ const SPELL_ART = {
   fireball: "./assets/spells/fireball.jpg",
   spark: "./assets/spells/spark.jpg",
 };
+
+class Rng {
+  constructor(seed) {
+    this.state = seed >>> 0;
+  }
+
+  next() {
+    let t = (this.state += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+
+  int(max) {
+    if (max <= 0) {
+      return 0;
+    }
+    return Math.floor(this.next() * max);
+  }
+
+  pick(items) {
+    return items[this.int(items.length)];
+  }
+}
 
 let cardLibrary = buildCardLibrary(fallbackCards);
 let currentPuzzle = structuredClone(defaultPuzzle);
@@ -284,6 +317,18 @@ elements.panelToggle.addEventListener("click", () => {
   elements.panelToggle.setAttribute("aria-expanded", String(expanded));
 });
 
+elements.genRun.addEventListener("click", () => {
+  generatePuzzleFromInputs();
+});
+
+elements.genSeedRandom.addEventListener("change", () => {
+  const useRandom = elements.genSeedRandom.checked;
+  elements.genSeed.disabled = useRandom;
+  if (useRandom) {
+    elements.genSeed.value = "";
+  }
+});
+
 elements.puzzleSelect.addEventListener("change", () => {
   const value = elements.puzzleSelect.value;
   if (!value || value === "custom") {
@@ -309,10 +354,17 @@ function syncPuzzleSelect() {
     (option) => option.value === currentId
   );
   if (!existing && currentId !== "custom") {
-    const option = document.createElement("option");
-    option.value = "custom";
-    option.textContent = `Custom — ${currentId}`;
-    select.appendChild(option);
+    const customOption =
+      Array.from(select.options).find((option) => option.value === "custom") ??
+      null;
+    if (customOption) {
+      customOption.textContent = `Custom — ${currentId}`;
+    } else {
+      const option = document.createElement("option");
+      option.value = "custom";
+      option.textContent = `Custom — ${currentId}`;
+      select.appendChild(option);
+    }
   }
   const hasEntry = PUZZLE_LIBRARY.some((item) => item.id === currentId);
   select.value = hasEntry ? currentId : "custom";
@@ -335,6 +387,167 @@ function populatePuzzleSelect() {
   customOption.textContent = "Custom";
   select.appendChild(customOption);
   syncPuzzleSelect();
+}
+
+function generatePuzzleFromInputs() {
+  const useRandom = elements.genSeedRandom.checked;
+  const seedValue = Number(elements.genSeed.value);
+  const seed = useRandom
+    ? Date.now()
+    : Number.isFinite(seedValue)
+      ? seedValue
+      : Date.now();
+  if (!useRandom) {
+    elements.genSeed.value = String(seed);
+  }
+  const steps = parseNumber(elements.genSteps.value, 4, 1, 8);
+  const handSize = parseNumber(elements.genHand.value, 4, 1, 8);
+  const manaCap = parseNumber(elements.genMana.value, 10, 1, 20);
+  const decoys = parseNumber(elements.genDecoys.value, 0, 0, 6);
+  const targetRounds = parseNumber(elements.genRounds.value, 1, 1, 6);
+  const manaPerRound = parseNumber(elements.genManaRound.value, 0, 0, 10);
+
+  const rng = new Rng(seed);
+  const playable = Object.values(cardLibrary.byId).filter(
+    (card) => card.type === "creature" || card.type === "spell"
+  );
+
+  let puzzle = null;
+  for (let attempt = 0; attempt < 50 && !puzzle; attempt += 1) {
+    const hand = pickHand(rng, playable, handSize);
+    const startState = normalizeState({
+      player: {
+        mana: manaCap,
+        hand,
+        board: [],
+      },
+      opponent: {
+        name: currentPuzzle.opponent?.name ?? "Toad Bureaucrat",
+        health: 30,
+        board: [],
+      },
+      manaPerRound,
+      targetRounds,
+    });
+
+    const ghost = ghostWalk(startState, rng, steps);
+    if (ghost.trace.length === 0) {
+      continue;
+    }
+    try {
+      const base = materializeGhost(
+        ghost,
+        seed,
+        steps,
+        targetRounds,
+        manaPerRound
+      );
+      puzzle = decoys > 0 ? addDecoys(base, rng, playable, decoys) : base;
+    } catch {
+      puzzle = null;
+    }
+  }
+
+  if (!puzzle) {
+    setStatus("Generator failed to produce a puzzle.", "warn");
+    return;
+  }
+
+  currentPuzzle = puzzle;
+  elements.puzzleJson.value = JSON.stringify(currentPuzzle, null, 2);
+  resetState();
+  setStatus(`Generated ${puzzle.id}.`);
+}
+
+function parseNumber(value, fallback, min, max) {
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function pickHand(rng, pool, count) {
+  const hand = [];
+  for (let i = 0; i < count; i += 1) {
+    const pick = rng.pick(pool);
+    hand.push(pick.id);
+  }
+  return hand;
+}
+
+function ghostWalk(startState, rng, steps) {
+  let current = structuredClone(startState);
+  const trace = [];
+
+  for (let step = 0; step < steps; step += 1) {
+    let actions = getLegalActions(current, cardLibrary);
+    actions = actions.filter((action) => action.type !== "end");
+    if (actions.length === 0) {
+      break;
+    }
+    const action = rng.pick(actions);
+    current = applyAction(current, action, cardLibrary);
+    trace.push(action);
+  }
+
+  return { trace, startState, endState: current };
+}
+
+function materializeGhost(ghost, seed, steps, targetRounds, manaPerRound) {
+  const usedCards = ghost.trace
+    .filter((action) => action.type === "play")
+    .map((action) => action.card);
+  const manaSpent = usedCards.reduce((sum, cardId) => {
+    const def = cardLibrary.byId[cardId];
+    return sum + (def?.cost ?? 0);
+  }, 0);
+
+  const damage = ghost.startState.opponent.health - ghost.endState.opponent.health;
+  if (damage <= 0) {
+    throw new Error("No damage dealt.");
+  }
+
+  const tags = new Set();
+  usedCards.forEach((cardId) => {
+    const def = cardLibrary.byId[cardId];
+    def?.keywords?.forEach((kw) => tags.add(kw));
+  });
+
+  return {
+    id: `puzzle_${seed}`,
+    difficulty: steps >= 5 ? "hard" : steps >= 3 ? "medium" : "easy",
+    seed,
+    tags: Array.from(tags),
+    targetRounds,
+    manaPerRound,
+    player: {
+      mana: manaSpent,
+      hand: usedCards,
+      board: [],
+    },
+    opponent: {
+      name: ghost.startState.opponent.name ?? "Boss",
+      health: Math.max(1, damage),
+      board: [],
+    },
+    solution: ghost.trace,
+  };
+}
+
+function addDecoys(puzzle, rng, pool, extra) {
+  const hand = [...puzzle.player.hand];
+  for (let i = 0; i < extra; i += 1) {
+    const pick = rng.pick(pool);
+    hand.push(pick.id);
+  }
+  return {
+    ...puzzle,
+    player: {
+      ...puzzle.player,
+      hand,
+    },
+  };
 }
 
 elements.stepSolution.addEventListener("click", () => {
@@ -951,5 +1164,7 @@ function formatSpellDescription(def) {
 
 loadCardLibrary().then(() => {
   populatePuzzleSelect();
+  elements.genSeedRandom.checked = true;
+  elements.genSeed.disabled = true;
   render();
 });

@@ -108,6 +108,47 @@
           </div>
 
           <div class="section">
+            <div class="section-title">Generator</div>
+            <div class="generator-grid">
+              <label class="field">
+                <span>Seed</span>
+                <div class="seed-row">
+                  <input id="gen-seed" type="number" placeholder="Random" />
+                  <label class="seed-toggle">
+                    <input id="gen-seed-random" type="checkbox" checked />
+                    <span>Random</span>
+                  </label>
+                </div>
+              </label>
+              <label class="field">
+                <span>Steps</span>
+                <input id="gen-steps" type="number" min="1" max="8" value="4" />
+              </label>
+              <label class="field">
+                <span>Hand size</span>
+                <input id="gen-hand" type="number" min="1" max="8" value="4" />
+              </label>
+              <label class="field">
+                <span>Mana cap</span>
+                <input id="gen-mana" type="number" min="1" max="20" value="10" />
+              </label>
+              <label class="field">
+                <span>Decoys</span>
+                <input id="gen-decoys" type="number" min="0" max="6" value="0" />
+              </label>
+              <label class="field">
+                <span>Target rounds</span>
+                <input id="gen-rounds" type="number" min="1" max="6" value="1" />
+              </label>
+              <label class="field">
+                <span>Mana / round</span>
+                <input id="gen-mana-round" type="number" min="0" max="10" value="0" />
+              </label>
+            </div>
+            <button class="btn primary" id="gen-run">Generate puzzle</button>
+          </div>
+
+          <div class="section">
             <div class="section-title">Legal Actions</div>
             <div class="action-list" id="action-list"></div>
           </div>
