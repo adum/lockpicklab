@@ -130,6 +130,22 @@ body::after {
   color: var(--muted);
 }
 
+.puzzle-select {
+  background: rgba(20, 21, 28, 0.9);
+  color: var(--ink);
+  border: 1px solid rgba(106, 160, 200, 0.3);
+  border-radius: 10px;
+  padding: 4px 8px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  min-width: 160px;
+}
+
+.puzzle-select:focus {
+  outline: 2px solid rgba(106, 160, 200, 0.4);
+  outline-offset: 2px;
+}
+
 .grid {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
@@ -350,7 +366,7 @@ body::after {
   animation: rise 0.4s ease;
   min-height: 140px;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   width: clamp(140px, 18vw, 190px);
 }
 

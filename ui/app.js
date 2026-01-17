@@ -99,7 +99,7 @@ const defaultPuzzle = {
 };
 
 const elements = {
-  puzzleId: document.getElementById("puzzle-id"),
+  puzzleSelect: document.getElementById("puzzle-select"),
   puzzleDifficulty: document.getElementById("puzzle-difficulty"),
   puzzleTags: document.getElementById("puzzle-tags"),
   opponentHealth: document.getElementById("opponent-health"),
@@ -126,6 +126,14 @@ const elements = {
   panel: document.getElementById("puzzle-panel"),
   panelToggle: document.getElementById("panel-toggle"),
 };
+
+const PUZZLE_LIBRARY = [
+  {
+    id: "puzzle_0001",
+    label: "Puzzle 1 — Lancer Strike",
+    data: defaultPuzzle,
+  },
+];
 
 const BOSS_ART = {
   "Toad Bureaucrat": "./assets/boss/toad_dark.jpg",
@@ -276,6 +284,59 @@ elements.panelToggle.addEventListener("click", () => {
   elements.panelToggle.setAttribute("aria-expanded", String(expanded));
 });
 
+elements.puzzleSelect.addEventListener("change", () => {
+  const value = elements.puzzleSelect.value;
+  if (!value || value === "custom") {
+    return;
+  }
+  const entry = PUZZLE_LIBRARY.find((item) => item.id === value);
+  if (!entry) {
+    return;
+  }
+  currentPuzzle = structuredClone(entry.data);
+  elements.puzzleJson.value = JSON.stringify(currentPuzzle, null, 2);
+  resetState();
+  setStatus(`Loaded ${entry.label}.`);
+});
+
+function syncPuzzleSelect() {
+  const select = elements.puzzleSelect;
+  if (!select) {
+    return;
+  }
+  const currentId = currentPuzzle?.id ?? "custom";
+  const existing = Array.from(select.options).find(
+    (option) => option.value === currentId
+  );
+  if (!existing && currentId !== "custom") {
+    const option = document.createElement("option");
+    option.value = "custom";
+    option.textContent = `Custom — ${currentId}`;
+    select.appendChild(option);
+  }
+  const hasEntry = PUZZLE_LIBRARY.some((item) => item.id === currentId);
+  select.value = hasEntry ? currentId : "custom";
+}
+
+function populatePuzzleSelect() {
+  const select = elements.puzzleSelect;
+  if (!select) {
+    return;
+  }
+  select.innerHTML = "";
+  PUZZLE_LIBRARY.forEach((entry) => {
+    const option = document.createElement("option");
+    option.value = entry.id;
+    option.textContent = entry.label;
+    select.appendChild(option);
+  });
+  const customOption = document.createElement("option");
+  customOption.value = "custom";
+  customOption.textContent = "Custom";
+  select.appendChild(customOption);
+  syncPuzzleSelect();
+}
+
 elements.stepSolution.addEventListener("click", () => {
   stepSolution();
 });
@@ -347,7 +408,7 @@ function setStatus(message, tone = "ok") {
 function render() {
   const puzzle = currentPuzzle ?? {};
 
-  elements.puzzleId.textContent = puzzle.id ?? "—";
+  syncPuzzleSelect();
   elements.puzzleDifficulty.textContent = puzzle.difficulty ?? "—";
   elements.puzzleTags.textContent = Array.isArray(puzzle.tags)
     ? puzzle.tags.join(", ")
@@ -889,5 +950,6 @@ function formatSpellDescription(def) {
 }
 
 loadCardLibrary().then(() => {
+  populatePuzzleSelect();
   render();
 });
