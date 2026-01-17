@@ -128,11 +128,18 @@ const elements = {
 };
 
 const BOSS_ART = {
-  "Toad Bureaucrat": "./assets/boss/toad.jpg",
+  "Toad Bureaucrat": "./assets/boss/toad_dark.jpg",
 };
 
 const CREATURE_ART = {
   cultist: "./assets/creatures/cultist.jpg",
+};
+
+const CREATURE_PLACEHOLDER = "./assets/creatures/placeholder.jpg";
+
+const SPELL_ART = {
+  fireball: "./assets/spells/fireball.jpg",
+  spark: "./assets/spells/spark.jpg",
 };
 
 let cardLibrary = buildCardLibrary(fallbackCards);
@@ -538,8 +545,11 @@ function renderBoard(container, list, side) {
     badges.appendChild(powerBadge);
     badges.appendChild(manaBadge);
 
-    if (isCreature) {
-      const artSrc = CREATURE_ART[def?.id ?? unit.card];
+    if (isCreature || def?.type === "spell") {
+      const artMap = def?.type === "spell" ? SPELL_ART : CREATURE_ART;
+      const artSrc =
+        artMap[def?.id ?? unit.card] ??
+        (def?.type === "creature" ? CREATURE_PLACEHOLDER : null);
       if (artSrc) {
         const artWrap = document.createElement("div");
         artWrap.className = "card-art";
@@ -734,8 +744,11 @@ function renderHand(container, hand) {
     const cost = def?.cost ?? "?";
     const power = def?.stats?.power ?? null;
 
-    if (def?.type === "creature") {
-      const artSrc = CREATURE_ART[def?.id ?? cardId];
+    if (def?.type === "creature" || def?.type === "spell") {
+      const artMap = def?.type === "spell" ? SPELL_ART : CREATURE_ART;
+      const artSrc =
+        artMap[def?.id ?? cardId] ??
+        (def?.type === "creature" ? CREATURE_PLACEHOLDER : null);
       if (artSrc) {
         const artWrap = document.createElement("div");
         artWrap.className = "hand-art";

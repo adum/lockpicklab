@@ -1,6 +1,6 @@
 .rules-hero {
   padding: 48px 48px 24px;
-  background: linear-gradient(120deg, rgba(36, 74, 98, 0.12), transparent 65%);
+  background: linear-gradient(120deg, rgba(60, 125, 255, 0.15), transparent 65%);
 }
 
 .rules-hero-inner {
@@ -32,11 +32,11 @@
 }
 
 .rules-content section {
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(20, 21, 28, 0.85);
   border-radius: 18px;
   padding: 20px 24px;
-  border: 1px solid rgba(220, 205, 187, 0.7);
-  box-shadow: 0 12px 24px rgba(31, 26, 23, 0.08);
+  border: 1px solid rgba(44, 42, 49, 0.7);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
 }
 
 .rules-content h2 {
@@ -58,7 +58,7 @@
 }
 
 .rules-card {
-  background: rgba(36, 74, 98, 0.08);
+  background: rgba(36, 74, 98, 0.2);
   border-radius: 14px;
   padding: 12px 14px;
 }
