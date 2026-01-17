@@ -24,6 +24,7 @@ function cloneSide(side: SideState): SideState {
 function cloneOpponent(side: OpponentState): OpponentState {
   return {
     health: side.health,
+    name: side.name,
     board: side.board.map(cloneInstance),
     deck: side.deck ? [...side.deck] : undefined,
     graveyard: side.graveyard ? [...side.graveyard] : undefined,

@@ -416,6 +416,22 @@ body::after {
   font-size: 1rem;
 }
 
+.card-art {
+  width: 100%;
+  height: 120px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(31, 26, 23, 0.15);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.card-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .card-desc {
   font-size: 0.75rem;
   color: var(--muted);
@@ -431,6 +447,7 @@ body::after {
 .card-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 6px;
 }
 
 .attack-button {
@@ -453,6 +470,31 @@ body::after {
 }
 
 .attack-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+.sacrifice-button {
+  border: none;
+  background: #9f2f2f;
+  color: #f7efea;
+  border-radius: 12px;
+  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  box-shadow: 0 8px 16px rgba(159, 47, 47, 0.25);
+}
+
+.sacrifice-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sacrifice-button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
   box-shadow: none;
@@ -575,6 +617,22 @@ body::after {
   text-transform: capitalize;
 }
 
+.hand-art {
+  width: 100%;
+  height: 70px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(31, 26, 23, 0.15);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.hand-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .hand-desc {
   font-size: 0.72rem;
   color: var(--muted);
@@ -627,6 +685,42 @@ body::after {
   display: grid;
   gap: 16px;
   align-content: start;
+  position: relative;
+}
+
+.panel-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(36, 74, 98, 0.2);
+  background: rgba(36, 74, 98, 0.08);
+  color: var(--accent-2);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.panel-arrow {
+  transition: transform 0.2s ease;
+}
+
+.panel.collapsed .panel-arrow {
+  transform: rotate(0deg);
+}
+
+.panel:not(.collapsed) .panel-arrow {
+  transform: rotate(90deg);
+}
+
+.panel-body {
+  display: grid;
+  gap: 16px;
+}
+
+.panel.collapsed .panel-body {
+  display: none;
 }
 
 .panel-header {

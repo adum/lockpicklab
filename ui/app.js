@@ -41,7 +41,7 @@ const fallbackCards = {
       type: "creature",
       cost: 4,
       stats: { power: 5 },
-      keywords: ["pierce", "rush"],
+      keywords: ["pierce"],
     },
     {
       id: "fireball",
@@ -74,6 +74,7 @@ const defaultPuzzle = {
     board: [],
   },
   opponent: {
+    name: "Toad Bureaucrat",
     health: 6,
     board: [
       {
@@ -102,6 +103,8 @@ const elements = {
   puzzleDifficulty: document.getElementById("puzzle-difficulty"),
   puzzleTags: document.getElementById("puzzle-tags"),
   opponentHealth: document.getElementById("opponent-health"),
+  bossName: document.getElementById("boss-name"),
+  bossArt: document.getElementById("boss-art"),
   playerMana: document.getElementById("player-mana"),
   opponentBoard: document.getElementById("opponent-board"),
   playerBoard: document.getElementById("player-board"),
@@ -120,6 +123,16 @@ const elements = {
   roundsLeft: document.getElementById("rounds-left"),
   manaPerRound: document.getElementById("mana-per-round"),
   endRound: document.getElementById("end-round"),
+  panel: document.getElementById("puzzle-panel"),
+  panelToggle: document.getElementById("panel-toggle"),
+};
+
+const BOSS_ART = {
+  "Toad Bureaucrat": "./assets/boss/toad.jpg",
+};
+
+const CREATURE_ART = {
+  cultist: "./assets/creatures/cultist.jpg",
 };
 
 let cardLibrary = buildCardLibrary(fallbackCards);
@@ -136,15 +149,14 @@ let actions = [];
 let solutionIndex = 0;
 let autoplayTimer = null;
 let cachedLegalActions = [];
-let pendingAttackSource = null;
+let pendingAction = null;
 let damageFlash = { creatures: new Set(), boss: false };
 const KEYWORD_TOOLTIPS = {
   guard: "Guard: must be attacked before non-Guard targets.",
-  rush: "Rush: can attack enemy creatures immediately.",
   storm: "Storm: can attack any target immediately.",
   pierce: "Pierce: excess power hits the boss.",
   chain: "Chain: bonus effect if a card was already played this round.",
-  sacrifice: "Sacrifice: destroy a friendly creature to trigger an effect.",
+  sacrifice: "Sacrifice: destroy this creature to give a friendly creature +4 power.",
   tired: "Tired: this creature already attacked this round.",
   vanilla: "No special abilities.",
 };
@@ -174,7 +186,7 @@ function resetState() {
   snapshots = [initialState];
   actions = [];
   solutionIndex = 0;
-  pendingAttackSource = null;
+  pendingAction = null;
   damageFlash = { creatures: new Set(), boss: false };
   stopAutoplay();
   render();
@@ -247,6 +259,16 @@ elements.endRound.addEventListener("click", () => {
   applyAndRender({ type: "end" });
 });
 
+elements.panelToggle.addEventListener("click", () => {
+  const panel = elements.panel;
+  if (!panel) {
+    return;
+  }
+  panel.classList.toggle("collapsed");
+  const expanded = !panel.classList.contains("collapsed");
+  elements.panelToggle.setAttribute("aria-expanded", String(expanded));
+});
+
 elements.stepSolution.addEventListener("click", () => {
   stepSolution();
 });
@@ -292,7 +314,7 @@ function applyAndRender(action, isSolutionStep = false) {
     currentState = next;
     snapshots.push(next);
     actions.push(action);
-    pendingAttackSource = null;
+    pendingAction = null;
     if (isSolutionStep) {
       solutionIndex += 1;
     }
@@ -327,6 +349,15 @@ function render() {
   elements.opponentHealth.textContent = currentState.opponent?.health ?? 0;
   elements.playerMana.textContent = currentState.player?.mana ?? 0;
 
+  const bossName = currentPuzzle.opponent?.name ?? "Boss";
+  if (elements.bossName) {
+    elements.bossName.textContent = bossName;
+  }
+  if (elements.bossArt) {
+    elements.bossArt.src = BOSS_ART[bossName] ?? "./assets/boss/toad.png";
+    elements.bossArt.alt = bossName;
+  }
+
   const totalRoundsRaw = currentState.targetRounds ?? currentPuzzle.targetRounds;
   const totalRounds =
     typeof totalRoundsRaw === "number" ? totalRoundsRaw : Number(totalRoundsRaw);
@@ -350,13 +381,14 @@ function render() {
 
   cachedLegalActions = getLegalActions(currentState, cardLibrary);
   if (
-    pendingAttackSource &&
+    pendingAction &&
     !cachedLegalActions.some(
       (action) =>
-        action.type === "attack" && action.source === pendingAttackSource
+        action.type === pendingAction.type &&
+        action.source === pendingAction.source
     )
   ) {
-    pendingAttackSource = null;
+    pendingAction = null;
   }
 
   renderBoard(elements.opponentBoard, currentState.opponent?.board ?? [], "opponent");
@@ -487,6 +519,7 @@ function renderBoard(container, list, side) {
     const costText = def?.cost ?? "?";
     const powerValue = unit.power ?? def?.stats?.power ?? 0;
     const isCreature = def?.type === "creature";
+    const hasSacrifice = def?.keywords?.includes("sacrifice") ?? false;
 
     const badges = document.createElement("div");
     badges.className = "card-badges";
@@ -504,6 +537,19 @@ function renderBoard(container, list, side) {
 
     badges.appendChild(powerBadge);
     badges.appendChild(manaBadge);
+
+    if (isCreature) {
+      const artSrc = CREATURE_ART[def?.id ?? unit.card];
+      if (artSrc) {
+        const artWrap = document.createElement("div");
+        artWrap.className = "card-art";
+        const artImg = document.createElement("img");
+        artImg.src = artSrc;
+        artImg.alt = `${nameText} art`;
+        artWrap.appendChild(artImg);
+        card.appendChild(artWrap);
+      }
+    }
 
     const name = document.createElement("div");
     name.className = "card-name-line";
@@ -556,46 +602,114 @@ function renderBoard(container, list, side) {
       const attackActions = cachedLegalActions.filter(
         (action) => action.type === "attack" && action.source === sourceRef
       );
+      const activateActions = cachedLegalActions.filter(
+        (action) => action.type === "activate" && action.source === sourceRef
+      );
 
-      const actionsRow = document.createElement("div");
-      actionsRow.className = "card-actions";
+      if (attackActions.length > 0 || activateActions.length > 0 || hasSacrifice) {
+        const actionsRow = document.createElement("div");
+        actionsRow.className = "card-actions";
 
-      const attackButton = document.createElement("button");
-      attackButton.className = "attack-button";
-      attackButton.title = "Attack";
-      attackButton.disabled = attackActions.length === 0;
-      attackButton.innerHTML =
-        '<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M14.4 3.6l6 6-2.1 2.1-1.4-1.4-4.4 4.4 1.4 1.4-2.1 2.1-1.4-1.4-6 6-1.9-1.9 6-6-1.4-1.4 2.1-2.1 1.4 1.4 4.4-4.4-1.4-1.4 2.1-2.1z\" fill=\"currentColor\"/></svg>';
-      attackButton.addEventListener("click", () => {
-        if (attackActions.length === 0) {
-          setStatus("No legal attacks for that creature.", "warn");
-          return;
-        }
-        if (attackActions.length === 1) {
-          applyAndRender(attackActions[0]);
-          return;
-        }
-        pendingAttackSource =
-          pendingAttackSource === sourceRef ? null : sourceRef;
-        render();
-      });
-
-      actionsRow.appendChild(attackButton);
-      card.appendChild(actionsRow);
-
-      if (pendingAttackSource === sourceRef && attackActions.length > 1) {
-        const targetsRow = document.createElement("div");
-        targetsRow.className = "attack-targets";
-        attackActions.forEach((action) => {
-          const targetBtn = document.createElement("button");
-          targetBtn.className = "target-button";
-          targetBtn.textContent = describeRef(action.target, currentState);
-          targetBtn.addEventListener("click", () => {
-            applyAndRender(action);
-          });
-          targetsRow.appendChild(targetBtn);
+        const attackButton = document.createElement("button");
+        attackButton.className = "attack-button";
+        attackButton.title = "Attack";
+        attackButton.disabled = attackActions.length === 0;
+        attackButton.innerHTML =
+          '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.4 3.6l6 6-2.1 2.1-1.4-1.4-4.4 4.4 1.4 1.4-2.1 2.1-1.4-1.4-6 6-1.9-1.9 6-6-1.4-1.4 2.1-2.1 1.4 1.4 4.4-4.4-1.4-1.4 2.1-2.1z" fill="currentColor"/></svg>';
+        attackButton.addEventListener("click", () => {
+          if (attackActions.length === 0) {
+            setStatus("No legal attacks for that creature.", "warn");
+            return;
+          }
+          if (attackActions.length === 1) {
+            applyAndRender(attackActions[0]);
+            return;
+          }
+          if (
+            pendingAction &&
+            pendingAction.type === "attack" &&
+            pendingAction.source === sourceRef
+          ) {
+            pendingAction = null;
+          } else {
+            pendingAction = { type: "attack", source: sourceRef };
+          }
+          render();
         });
-        card.appendChild(targetsRow);
+
+        actionsRow.appendChild(attackButton);
+
+        if (hasSacrifice) {
+          const sacrificeButton = document.createElement("button");
+          sacrificeButton.className = "sacrifice-button";
+          sacrificeButton.title = "Sacrifice";
+          sacrificeButton.disabled = activateActions.length === 0;
+          sacrificeButton.innerHTML =
+            '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c2.8 0 5 2.2 5 5 0 2-1.1 3.6-2.7 4.4.3.7.7 1.6.7 2.6 0 2.8-1.9 5-3 6-1.1-1-3-3.2-3-6 0-1 .4-1.9.7-2.6C8.1 10.6 7 9 7 7c0-2.8 2.2-5 5-5zm-2.2 6.2c.7 0 1.3-.6 1.3-1.3S10.5 5.6 9.8 5.6s-1.3.6-1.3 1.3.6 1.3 1.3 1.3zm4.4 0c.7 0 1.3-.6 1.3-1.3s-.6-1.3-1.3-1.3-1.3.6-1.3 1.3.6 1.3 1.3 1.3z" fill="currentColor"/></svg>';
+          sacrificeButton.addEventListener("click", () => {
+            if (activateActions.length === 0) {
+              setStatus("No sacrifice targets for that creature.", "warn");
+              return;
+            }
+            if (activateActions.length === 1) {
+              applyAndRender(activateActions[0]);
+              return;
+            }
+            if (
+              pendingAction &&
+              pendingAction.type === "activate" &&
+              pendingAction.source === sourceRef
+            ) {
+              pendingAction = null;
+            } else {
+              pendingAction = { type: "activate", source: sourceRef };
+            }
+            render();
+          });
+
+          actionsRow.appendChild(sacrificeButton);
+        }
+        card.appendChild(actionsRow);
+
+        if (
+          pendingAction &&
+          pendingAction.source === sourceRef &&
+          pendingAction.type === "attack" &&
+          attackActions.length > 1
+        ) {
+          const targetsRow = document.createElement("div");
+          targetsRow.className = "attack-targets";
+          attackActions.forEach((action) => {
+            const targetBtn = document.createElement("button");
+            targetBtn.className = "target-button";
+            targetBtn.textContent = describeRef(action.target, currentState);
+            targetBtn.addEventListener("click", () => {
+              applyAndRender(action);
+            });
+            targetsRow.appendChild(targetBtn);
+          });
+          card.appendChild(targetsRow);
+        }
+
+        if (
+          pendingAction &&
+          pendingAction.source === sourceRef &&
+          pendingAction.type === "activate" &&
+          activateActions.length > 1
+        ) {
+          const targetsRow = document.createElement("div");
+          targetsRow.className = "attack-targets";
+          activateActions.forEach((action) => {
+            const targetBtn = document.createElement("button");
+            targetBtn.className = "target-button";
+            targetBtn.textContent = describeRef(action.target, currentState);
+            targetBtn.addEventListener("click", () => {
+              applyAndRender(action);
+            });
+            targetsRow.appendChild(targetBtn);
+          });
+          card.appendChild(targetsRow);
+        }
       }
     }
     container.appendChild(card);
@@ -619,6 +733,19 @@ function renderHand(container, hand) {
     const name = def?.name ?? cardId;
     const cost = def?.cost ?? "?";
     const power = def?.stats?.power ?? null;
+
+    if (def?.type === "creature") {
+      const artSrc = CREATURE_ART[def?.id ?? cardId];
+      if (artSrc) {
+        const artWrap = document.createElement("div");
+        artWrap.className = "hand-art";
+        const artImg = document.createElement("img");
+        artImg.src = artSrc;
+        artImg.alt = `${name} art`;
+        artWrap.appendChild(artImg);
+        chip.appendChild(artWrap);
+      }
+    }
 
     const topRow = document.createElement("div");
     topRow.className = "hand-card-top";

@@ -14,7 +14,6 @@ import { cloneState } from "./state";
 
 const GUARD: Keyword = "guard";
 const PIERCE: Keyword = "pierce";
-const RUSH: Keyword = "rush";
 const STORM: Keyword = "storm";
 const SACRIFICE: Keyword = "sacrifice";
 

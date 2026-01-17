@@ -77,6 +77,7 @@
       "required": ["health", "board"],
       "properties": {
         "health": {"type": "integer", "minimum": 0},
+        "name": {"type": "string"},
         "board": {
           "type": "array",
           "items": {"$ref": "#/$defs/cardInstance"},

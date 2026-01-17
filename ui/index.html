@@ -39,7 +39,7 @@
           <div class="boss-victory" id="boss-victory">Victory</div>
           <div class="boss-header-row">
             <div class="boss-art">
-              <img src="./assets/boss/toad.png" alt="Boss portrait" />
+              <img id="boss-art" src="./assets/boss/toad.jpg" alt="Boss portrait" />
             </div>
             <div class="boss-info">
               <div class="boss-topbar">
@@ -54,7 +54,7 @@
                 <button class="btn end-round" id="end-round">End Round</button>
               </div>
               <div class="side-header">
-                <div class="side-title">Boss</div>
+                <div class="side-title" id="boss-name">Boss</div>
                 <div
                   class="stat boss-stat"
                   data-tooltip="Boss health. Reduce to 0 to win."
@@ -84,38 +84,44 @@
         </div>
       </section>
 
-      <aside class="panel">
-        <div class="panel-header">
-          <div>
-            <div class="panel-title">Puzzle Loader</div>
-            <div class="panel-subtitle">Paste JSON, or load a file.</div>
+      <aside class="panel collapsed" id="puzzle-panel">
+        <button class="panel-toggle" id="panel-toggle" aria-expanded="false">
+          <span>Tools</span>
+          <span class="panel-arrow">▸</span>
+        </button>
+        <div class="panel-body">
+          <div class="panel-header">
+            <div>
+              <div class="panel-title">Puzzle Loader</div>
+              <div class="panel-subtitle">Paste JSON, or load a file.</div>
+            </div>
+            <div class="panel-actions">
+              <button class="btn" id="load-example">Load example</button>
+              <label class="btn ghost" for="file-input">Choose file</label>
+              <input id="file-input" type="file" accept="application/json" />
+            </div>
           </div>
-          <div class="panel-actions">
-            <button class="btn" id="load-example">Load example</button>
-            <label class="btn ghost" for="file-input">Choose file</label>
-            <input id="file-input" type="file" accept="application/json" />
+          <textarea id="puzzle-json" spellcheck="false"></textarea>
+          <div class="panel-footer">
+            <button class="btn primary" id="parse-json">Parse JSON</button>
+            <div class="status" id="status">Ready.</div>
           </div>
-        </div>
-        <textarea id="puzzle-json" spellcheck="false"></textarea>
-        <div class="panel-footer">
-          <button class="btn primary" id="parse-json">Parse JSON</button>
-          <div class="status" id="status">Ready.</div>
-        </div>
 
-        <div class="section">
-          <div class="section-title">Legal Actions</div>
-          <div class="action-list" id="action-list"></div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">Playback</div>
-          <div class="playback-controls">
-            <button class="btn ghost" id="reset-state">Reset</button>
-            <button class="btn ghost" id="undo-action">Undo</button>
-            <button class="btn" id="step-solution">Step solution</button>
-            <button class="btn primary" id="play-solution">Auto play</button>
+          <div class="section">
+            <div class="section-title">Legal Actions</div>
+            <div class="action-list" id="action-list"></div>
           </div>
-          <div class="log" id="action-log"></div>
+
+          <div class="section">
+            <div class="section-title">Playback</div>
+            <div class="playback-controls">
+              <button class="btn ghost" id="reset-state">Reset</button>
+              <button class="btn ghost" id="undo-action">Undo</button>
+              <button class="btn" id="step-solution">Step solution</button>
+              <button class="btn primary" id="play-solution">Auto play</button>
+            </div>
+            <div class="log" id="action-log"></div>
+          </div>
         </div>
       </aside>
     </main>

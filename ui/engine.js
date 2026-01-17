@@ -1,6 +1,5 @@
 const GUARD = "guard";
 const PIERCE = "pierce";
-const RUSH = "rush";
 const STORM = "storm";
 const SACRIFICE = "sacrifice";
 
@@ -37,6 +36,7 @@ function cloneSide(side) {
 function cloneOpponent(side) {
   return {
     health: side.health,
+    name: side.name,
     board: side.board.map(cloneInstance),
     deck: side.deck ? [...side.deck] : undefined,
     graveyard: side.graveyard ? [...side.graveyard] : undefined,

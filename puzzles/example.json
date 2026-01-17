@@ -11,6 +11,7 @@
     "board": []
   },
   "opponent": {
+    "name": "Toad Bureaucrat",
     "health": 6,
     "board": [
       {

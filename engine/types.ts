@@ -1,7 +1,6 @@
 export type CardType = "creature" | "spell" | "effect" | "mod";
 export type Keyword =
   | "guard"
-  | "rush"
   | "storm"
   | "pierce"
   | "chain"
@@ -57,6 +56,7 @@ export interface SideState {
 
 export interface OpponentState {
   health: number;
+  name?: string;
   board: CardInstance[];
   deck?: string[];
   graveyard?: string[];

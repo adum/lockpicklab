@@ -121,7 +121,7 @@ Here is a comprehensive Design Document for **"Project Lockpick,"** a procedural
 
 * **The Guard Rule:** If an enemy has **Guard**, the Player cannot attack the Enemy Hero or non-Guard minions.
 * **Retaliation:** When a minion attacks another minion, they deal their Power damage to each other simultaneously.
-* **Exhaustion:** Minions cannot attack the turn they are played unless they have **Rush**.
+* **Exhaustion:** Minions can attack the turn they are played, but only once per round.
 
 ---
 
@@ -131,19 +131,18 @@ To create "Hard" puzzles, we use mechanics that enforce **Order of Operations** 
 
 ### 3.1 Keywords
 
-1. **Rush:** Can attack minions immediately.
-2. **Storm:** Can attack anything immediately.
-3. **Guard:** Must be attacked first.
-4. **Pierce:** Excess damage to a minion hits the Enemy Hero (Math puzzle mechanic).
-5. **Chain:** Triggers a bonus effect if you have already played a card this turn (Sequencing mechanic).
-6. **Sacrifice:** Destroy a friendly minion to trigger an effect (Board space mechanic).
+1. **Storm:** Can attack anything immediately.
+2. **Guard:** Must be attacked first.
+3. **Pierce:** Excess damage to a minion hits the Enemy Hero (Math puzzle mechanic).
+4. **Chain:** Triggers a bonus effect if you have already played a card this turn (Sequencing mechanic).
+5. **Sacrifice:** Destroy a friendly minion to trigger an effect (Board space mechanic).
 
 ### 3.2 Sample Card Library
 
 * **Spark:** (1 Mana) Deal 2 Damage. **Chain:** Deal 4 instead.
 * **Cultist:** (1 Mana, Power 1) **Sacrifice:** Give a friendly minion +4 Power.
 * **Ox:** (3 Mana, Power 5) **Guard**.
-* **Lancer:** (4 Mana, Power 5) **Pierce**, **Rush**.
+* **Lancer:** (4 Mana, Power 5) **Pierce**.
 
 ---
 

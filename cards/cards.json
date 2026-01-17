@@ -36,7 +36,7 @@
       "type": "creature",
       "cost": 4,
       "stats": {"power": 5},
-      "keywords": ["pierce", "rush"]
+      "keywords": ["pierce"]
     },
     {
       "id": "fireball",
