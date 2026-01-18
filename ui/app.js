@@ -154,6 +154,15 @@ const elements = {
   undoAction: document.getElementById("undo-action"),
   stepSolution: document.getElementById("step-solution"),
   playSolution: document.getElementById("play-solution"),
+  solveDepth: document.getElementById("solve-depth"),
+  solveWinsMax: document.getElementById("solve-wins-max"),
+  solveRun: document.getElementById("solve-run"),
+  solveStop: document.getElementById("solve-stop"),
+  solveWins: document.getElementById("solve-wins"),
+  solveVisited: document.getElementById("solve-visited"),
+  solveExpanded: document.getElementById("solve-expanded"),
+  solveNote: document.getElementById("solve-note"),
+  solveResults: document.getElementById("solve-results"),
   roundsLeft: document.getElementById("rounds-left"),
   manaPerRoundWrap: document.getElementById("mana-per-round-wrap"),
   manaPerRound: document.getElementById("mana-per-round"),
@@ -256,6 +265,9 @@ let cachedLegalActions = [];
 let pendingAction = null;
 let damageFlash = { creatures: new Set(), boss: false };
 let failureState = false;
+let solverState = null;
+let solverCancel = false;
+let lastSolverResults = { wins: [], startState: null };
 const KEYWORD_TOOLTIPS = {
   guard: "Guard: must be attacked before non-Guard targets.",
   storm: "Storm: can attack any target immediately.",
@@ -294,7 +306,9 @@ function resetState() {
   pendingAction = null;
   damageFlash = { creatures: new Set(), boss: false };
   failureState = false;
+  stopSolver();
   stopAutoplay();
+  resetSolverResults();
   render();
   setStatus("State reset.");
 }
@@ -378,6 +392,14 @@ elements.panelToggle.addEventListener("click", () => {
 
 elements.genRun.addEventListener("click", () => {
   generatePuzzleFromInputs();
+});
+
+elements.solveRun.addEventListener("click", () => {
+  startSolver();
+});
+
+elements.solveStop.addEventListener("click", () => {
+  stopSolver();
 });
 
 document.addEventListener("pointerdown", (event) => {
@@ -864,6 +886,255 @@ function isFinalRound(state) {
     return false;
   }
   return totalRounds - (state.turn - 1) === 1;
+}
+
+function isFinalRoundForSolver(state) {
+  const totalRounds =
+    typeof state.targetRounds === "number"
+      ? state.targetRounds
+      : Number(state.targetRounds);
+  if (!Number.isFinite(totalRounds)) {
+    return false;
+  }
+  return totalRounds - (state.turn - 1) === 1;
+}
+
+function isPastRoundLimit(state) {
+  const totalRounds =
+    typeof state.targetRounds === "number"
+      ? state.targetRounds
+      : Number(state.targetRounds);
+  if (!Number.isFinite(totalRounds)) {
+    return false;
+  }
+  return state.turn > totalRounds;
+}
+
+function startSolver() {
+  if (solverState) {
+    stopSolver();
+  }
+  const maxDepth = parseNumber(elements.solveDepth?.value ?? 8, 8, 1, 20);
+  const maxWinsRaw = parseNumber(elements.solveWinsMax?.value ?? 0, 0, 0, 50);
+  const maxWins = maxWinsRaw === 0 ? Number.POSITIVE_INFINITY : maxWinsRaw;
+
+  solverCancel = false;
+  pendingAction = null;
+  render();
+
+  const startState = structuredClone(currentState);
+  solverState = {
+    maxDepth,
+    maxWins,
+    wins: [],
+    visited: 0,
+    expanded: 0,
+    seen: new Map(),
+    startState,
+    stack: [{ state: startState, depth: 0, path: [] }],
+  };
+  lastSolverResults = { wins: solverState.wins, startState };
+
+  updateSolverUI({ running: true });
+  stepSolver();
+}
+
+function stopSolver() {
+  if (!solverState) {
+    return;
+  }
+  solverCancel = true;
+}
+
+function stepSolver() {
+  if (!solverState) {
+    return;
+  }
+  const { maxDepth, maxWins, wins, seen, stack } = solverState;
+  let iterations = 0;
+
+  while (stack.length > 0 && iterations < 250) {
+    if (solverCancel) {
+      finalizeSolver(true);
+      return;
+    }
+
+    const node = stack.pop();
+    solverState.visited += 1;
+
+    if (isWin(node.state)) {
+      wins.push(node.path);
+      if (wins.length >= maxWins) {
+        finalizeSolver(false);
+        return;
+      }
+      iterations += 1;
+      continue;
+    }
+
+    if (isPastRoundLimit(node.state)) {
+      iterations += 1;
+      continue;
+    }
+
+    if (node.depth >= maxDepth) {
+      iterations += 1;
+      continue;
+    }
+
+    const key = JSON.stringify(node.state);
+    const prevDepth = seen.get(key);
+    if (prevDepth !== undefined && prevDepth <= node.depth) {
+      iterations += 1;
+      continue;
+    }
+    seen.set(key, node.depth);
+
+    const actions = getLegalActions(node.state, cardLibrary);
+    solverState.expanded += 1;
+
+    for (let i = actions.length - 1; i >= 0; i -= 1) {
+      const action = actions[i];
+      if (action.type === "end" && isFinalRoundForSolver(node.state)) {
+        continue;
+      }
+      try {
+        const next = applyAction(node.state, action, cardLibrary);
+        stack.push({
+          state: next,
+          depth: node.depth + 1,
+          path: [...node.path, action],
+        });
+      } catch {
+        continue;
+      }
+    }
+
+    iterations += 1;
+  }
+
+  updateSolverUI({ running: true });
+
+  if (stack.length === 0 || wins.length >= maxWins) {
+    finalizeSolver(false);
+    return;
+  }
+
+  window.setTimeout(stepSolver, 0);
+}
+
+function finalizeSolver(cancelled) {
+  if (!solverState) {
+    return;
+  }
+  lastSolverResults = {
+    wins: solverState.wins,
+    startState: solverState.startState ?? lastSolverResults.startState,
+  };
+  updateSolverUI({
+    running: false,
+    cancelled,
+  });
+  solverState = null;
+  solverCancel = false;
+}
+
+function resetSolverResults() {
+  lastSolverResults = { wins: [], startState: null };
+  if (elements.solveWins) {
+    elements.solveWins.textContent = "0";
+  }
+  if (elements.solveVisited) {
+    elements.solveVisited.textContent = "0";
+  }
+  if (elements.solveExpanded) {
+    elements.solveExpanded.textContent = "0";
+  }
+  if (elements.solveNote) {
+    elements.solveNote.textContent = "Idle.";
+  }
+  renderSolverResults();
+}
+
+function updateSolverUI(state) {
+  if (!elements.solveWins || !elements.solveVisited || !elements.solveExpanded) {
+    return;
+  }
+  if (solverState) {
+    lastSolverResults = {
+      wins: solverState.wins,
+      startState: solverState.startState ?? lastSolverResults.startState,
+    };
+  }
+  const wins = solverState?.wins?.length ?? lastSolverResults.wins.length ?? 0;
+  const visited = solverState?.visited ?? 0;
+  const expanded = solverState?.expanded ?? 0;
+
+  elements.solveWins.textContent = String(wins);
+  elements.solveVisited.textContent = String(visited);
+  elements.solveExpanded.textContent = String(expanded);
+
+  if (elements.solveRun && elements.solveStop) {
+    const running = Boolean(state?.running);
+    elements.solveRun.disabled = running;
+    elements.solveStop.disabled = !running;
+  }
+  if (elements.solveNote) {
+    if (state?.running) {
+      elements.solveNote.textContent = "Solving from current state…";
+    } else if (state?.cancelled) {
+      elements.solveNote.textContent = "Solver stopped.";
+    } else {
+      elements.solveNote.textContent = `Solver complete. ${wins} solution${
+        wins === 1 ? "" : "s"
+      } found.`;
+    }
+  }
+  renderSolverResults();
+}
+
+function renderSolverResults() {
+  const container = elements.solveResults;
+  if (!container) {
+    return;
+  }
+  const wins = solverState?.wins ?? lastSolverResults.wins;
+  const startState = solverState?.startState ?? lastSolverResults.startState;
+  container.innerHTML = "";
+  if (!wins || wins.length === 0 || !startState) {
+    container.innerHTML = '<div class="placeholder">No solutions yet.</div>';
+    return;
+  }
+  wins.forEach((path, index) => {
+    const card = document.createElement("div");
+    card.className = "solver-solution";
+
+    const title = document.createElement("div");
+    title.className = "solver-solution-title";
+    title.textContent = `Solution ${index + 1} · ${path.length} step${
+      path.length === 1 ? "" : "s"
+    }`;
+
+    const list = document.createElement("ol");
+    list.className = "solver-solution-steps";
+    let cursor = structuredClone(startState);
+    path.forEach((action) => {
+      const item = document.createElement("li");
+      let label = "Unknown action";
+      try {
+        label = formatAction(action, cursor);
+        cursor = applyAction(cursor, action, cardLibrary);
+      } catch {
+        label = formatAction(action, cursor);
+      }
+      item.textContent = label;
+      list.appendChild(item);
+    });
+
+    card.appendChild(title);
+    card.appendChild(list);
+    container.appendChild(card);
+  });
 }
 
 function getPendingPlayTargets() {

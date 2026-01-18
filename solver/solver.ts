@@ -11,6 +11,22 @@ function hashState(state: GameState): string {
   return JSON.stringify(state);
 }
 
+function isFinalRound(state: GameState): boolean {
+  const totalRounds = state.targetRounds;
+  if (!Number.isFinite(totalRounds)) {
+    return false;
+  }
+  return totalRounds - (state.turn - 1) === 1;
+}
+
+function isPastRoundLimit(state: GameState): boolean {
+  const totalRounds = state.targetRounds;
+  if (!Number.isFinite(totalRounds)) {
+    return false;
+  }
+  return state.turn > totalRounds;
+}
+
 export function solve(
   state: GameState,
   cards: CardLibrary,
@@ -20,7 +36,9 @@ export function solve(
   }
 ): SolveResult {
   const maxDepth = options?.maxDepth ?? 8;
-  const maxWins = options?.maxWins ?? 2;
+  const maxWinsRaw = options?.maxWins ?? 0;
+  const maxWins =
+    maxWinsRaw === 0 ? Number.POSITIVE_INFINITY : maxWinsRaw;
   const wins: Action[][] = [];
   const seen = new Map<string, number>();
   let visited = 0;
@@ -31,6 +49,10 @@ export function solve(
 
     if (isWin(current)) {
       wins.push([...path]);
+      return;
+    }
+
+    if (isPastRoundLimit(current)) {
       return;
     }
 
@@ -51,6 +73,9 @@ export function solve(
     for (const action of actions) {
       if (wins.length >= maxWins) {
         return;
+      }
+      if (action.type === "end" && isFinalRound(current)) {
+        continue;
       }
       try {
         const next = applyAction(current, action, cards);

@@ -951,6 +951,73 @@ body::after {
   border-top: 1px solid rgba(220, 205, 187, 0.6);
 }
 
+.solver-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.solver-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.solver-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.solver-status span {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.solver-note {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.solver-results {
+  display: grid;
+  gap: 10px;
+}
+
+.solver-solution {
+  border-radius: 12px;
+  border: 1px solid rgba(106, 160, 200, 0.25);
+  background: rgba(20, 38, 50, 0.6);
+  padding: 10px 12px;
+}
+
+.solver-solution-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.solver-solution-steps {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.solver-solution-steps li {
+  margin: 4px 0;
+}
+
 .section-title {
   font-weight: 600;
   font-size: 0.95rem;

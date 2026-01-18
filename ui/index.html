@@ -180,6 +180,32 @@
             </div>
             <div class="log" id="action-log"></div>
           </div>
+
+          <div class="section">
+            <div class="section-title">Solver</div>
+            <div class="solver-grid">
+              <label class="field">
+                <span>Max depth</span>
+                <input id="solve-depth" type="number" min="1" max="20" value="8" />
+              </label>
+              <label class="field">
+                <span>Max wins</span>
+                <input id="solve-wins-max" type="number" min="0" max="50" value="0" />
+                <span class="field-hint">0 = unlimited</span>
+              </label>
+            </div>
+            <div class="solver-actions">
+              <button class="btn primary" id="solve-run">Solve</button>
+              <button class="btn ghost" id="solve-stop" disabled>Stop</button>
+            </div>
+            <div class="solver-status">
+              <div>Solutions <span id="solve-wins">0</span></div>
+              <div>Visited <span id="solve-visited">0</span></div>
+              <div>Expanded <span id="solve-expanded">0</span></div>
+            </div>
+            <div class="solver-note" id="solve-note">Idle.</div>
+            <div class="solver-results" id="solve-results"></div>
+          </div>
         </div>
       </aside>
     </main>
