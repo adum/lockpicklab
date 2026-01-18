@@ -19,6 +19,9 @@ const manaCap = manaArg ? Number(manaArg) : 10;
 const cardsPath = path.resolve("cards/cards.json");
 const cards = loadCardLibrary(cardsPath);
 const rng = new Rng(seed);
+const bossPool = ["Toad Bureaucrat", "Clockwork King"];
+const bossRng = new Rng(seed ^ 0x9e3779b9);
+const bossName = bossPool.length > 0 ? bossRng.pick(bossPool) : "Toad Bureaucrat";
 
 const playable = Object.values(cards.byId).filter(
   (card) =>
@@ -42,7 +45,7 @@ function buildState(hand: string[]) {
       board: [],
     },
     opponent: {
-      name: "Toad Bureaucrat",
+      name: bossName,
       health: 30,
       board: [],
     },

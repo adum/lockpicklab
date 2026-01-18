@@ -63,21 +63,21 @@ body::after {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 28px 48px 12px;
-  gap: 24px;
+  padding: 16px 40px 8px;
+  gap: 18px;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 52px;
-  height: 52px;
+  width: 40px;
+  height: 40px;
   border-radius: 14px;
   background: var(--accent-2);
   color: #fffaf0;
@@ -88,17 +88,17 @@ body::after {
 
 .brand-title {
   font-family: var(--display-font);
-  font-size: 1.6rem;
+  font-size: 1.35rem;
   font-weight: 600;
   letter-spacing: 0.04em;
 }
 
 .brand-subtitle {
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -115,25 +115,25 @@ body::after {
 
 .brand-links {
   display: inline-flex;
-  gap: 12px;
-  font-size: 0.85rem;
+  gap: 10px;
+  font-size: 0.8rem;
 }
 
 .meta {
   display: grid;
-  gap: 6px;
-  padding: 12px 18px;
+  gap: 4px;
+  padding: 8px 12px;
   border-radius: 16px;
   background: rgba(22, 23, 30, 0.85);
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
-  min-width: 220px;
+  min-width: 200px;
 }
 
 .meta-row {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
 }
 
 .meta-label {
@@ -247,6 +247,10 @@ body::after {
   color: var(--accent-2);
 }
 
+.round-info.hidden {
+  display: none;
+}
+
 .end-round {
   background: var(--accent);
   box-shadow: 0 10px 20px rgba(212, 106, 58, 0.3);
@@ -261,6 +265,7 @@ body::after {
 .boss-art {
   width: 160px;
   flex: 0 0 auto;
+  position: relative;
 }
 
 .boss-art img {
@@ -302,6 +307,7 @@ body::after {
   padding: 8px 14px;
   box-shadow: 0 10px 24px rgba(176, 51, 51, 0.35);
   letter-spacing: 0.03em;
+  position: relative;
 }
 
 .boss-stat span {
@@ -338,6 +344,58 @@ body::after {
   position: relative;
   overflow: visible;
   width: clamp(140px, 18vw, 190px);
+}
+
+.card.targetable {
+  border-color: rgba(240, 176, 78, 0.7);
+  box-shadow: 0 12px 24px rgba(240, 176, 78, 0.25);
+}
+
+.target-icon {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(240, 176, 78, 0.6);
+  background: rgba(20, 16, 10, 0.8);
+  color: rgba(240, 176, 78, 0.95);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgba(20, 16, 10, 0.4);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  padding: 0;
+}
+
+.target-icon:hover {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 8px 16px rgba(240, 176, 78, 0.35);
+}
+
+.target-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.boss-stat .target-icon {
+  display: none;
+}
+
+.boss-art .target-icon {
+  top: 8px;
+  right: 8px;
+}
+
+.boss-art .target-icon:hover {
+  transform: translateY(-1px) scale(1.04);
+}
+
+.boss-art.targetable img {
+  border-color: rgba(240, 176, 78, 0.85);
+  box-shadow: 0 0 0 2px rgba(240, 176, 78, 0.4),
+    0 12px 26px rgba(240, 176, 78, 0.3);
 }
 
 .card.type-creature {
@@ -564,6 +622,7 @@ body::after {
   background: rgba(17, 18, 24, 0.8);
   border: 1px dashed rgba(212, 106, 58, 0.35);
   min-height: 72px;
+  align-items: flex-start;
 }
 
 .hand-card {
@@ -990,7 +1049,10 @@ body::after {
 }
 
 @media (max-width: 640px) {
-  .top,
+  .top {
+    padding: 14px 20px 8px;
+  }
+
   .grid {
     padding: 20px;
   }
@@ -1023,6 +1085,33 @@ body::after {
 }
 
 .boss-victory.visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.boss-failure {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--display-font);
+  font-size: clamp(2.4rem, 6vw, 4.2rem);
+  color: rgba(240, 176, 78, 0.95);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  background: rgba(12, 10, 8, 0.75);
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.98);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 5;
+  border-radius: 16px;
+  border: 2px solid rgba(240, 176, 78, 0.45);
+  text-shadow: 0 8px 24px rgba(240, 176, 78, 0.35);
+}
+
+.boss-failure.visible {
   opacity: 1;
   transform: scale(1);
 }

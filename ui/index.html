@@ -41,6 +41,7 @@
       <section class="board">
         <div class="side" id="boss-side">
           <div class="boss-victory" id="boss-victory">Victory</div>
+          <div class="boss-failure" id="boss-failure">Failure</div>
           <div class="boss-header-row">
             <div class="boss-art">
               <img id="boss-art" src="./assets/boss/toad_dark.jpg" alt="Boss portrait" />
@@ -51,7 +52,7 @@
                   <div class="round-label">Rounds left</div>
                   <div class="round-value" id="rounds-left">—</div>
                 </div>
-                <div class="round-info">
+                <div class="round-info" id="mana-per-round-wrap">
                   <div class="round-label">Mana / round</div>
                   <div class="round-value" id="mana-per-round">—</div>
                 </div>
@@ -155,6 +156,10 @@
               <label class="field">
                 <span>Mana / round</span>
                 <input id="gen-mana-round" type="number" min="0" max="10" value="0" />
+              </label>
+              <label class="field">
+                <span>Boss creatures (max)</span>
+                <input id="gen-boss" type="number" min="0" max="6" value="0" />
               </label>
             </div>
             <button class="btn primary" id="gen-run">Generate puzzle</button>

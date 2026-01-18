@@ -148,6 +148,7 @@ const elements = {
   stepSolution: document.getElementById("step-solution"),
   playSolution: document.getElementById("play-solution"),
   roundsLeft: document.getElementById("rounds-left"),
+  manaPerRoundWrap: document.getElementById("mana-per-round-wrap"),
   manaPerRound: document.getElementById("mana-per-round"),
   endRound: document.getElementById("end-round"),
   panel: document.getElementById("puzzle-panel"),
@@ -160,6 +161,7 @@ const elements = {
   genDecoys: document.getElementById("gen-decoys"),
   genRounds: document.getElementById("gen-rounds"),
   genManaRound: document.getElementById("gen-mana-round"),
+  genBoss: document.getElementById("gen-boss"),
   genRun: document.getElementById("gen-run"),
 };
 
@@ -239,6 +241,7 @@ let autoplayTimer = null;
 let cachedLegalActions = [];
 let pendingAction = null;
 let damageFlash = { creatures: new Set(), boss: false };
+let failureState = false;
 const KEYWORD_TOOLTIPS = {
   guard: "Guard: must be attacked before non-Guard targets.",
   storm: "Storm: can attack any target immediately.",
@@ -276,6 +279,7 @@ function resetState() {
   solutionIndex = 0;
   pendingAction = null;
   damageFlash = { creatures: new Set(), boss: false };
+  failureState = false;
   stopAutoplay();
   render();
   setStatus("State reset.");
@@ -339,6 +343,7 @@ elements.undoAction.addEventListener("click", () => {
   if (solutionIndex > actions.length) {
     solutionIndex = actions.length;
   }
+  failureState = false;
   stopAutoplay();
   render();
 });
@@ -359,6 +364,25 @@ elements.panelToggle.addEventListener("click", () => {
 
 elements.genRun.addEventListener("click", () => {
   generatePuzzleFromInputs();
+});
+
+document.addEventListener("pointerdown", (event) => {
+  if (!pendingAction || pendingAction.type !== "play") {
+    return;
+  }
+  const target = event.target;
+  if (target?.closest?.(".target-icon")) {
+    return;
+  }
+  if (target?.closest?.(".targetable")) {
+    return;
+  }
+  const handCard = target?.closest?.(".hand-card");
+  if (handCard && handCard.dataset.cardId === pendingAction.card) {
+    return;
+  }
+  pendingAction = null;
+  render();
 });
 
 elements.genSeedRandom.addEventListener("change", () => {
@@ -446,16 +470,27 @@ function generatePuzzleFromInputs() {
   const decoys = parseNumber(elements.genDecoys.value, 0, 0, 6);
   const targetRounds = parseNumber(elements.genRounds.value, 1, 1, 6);
   const manaPerRound = parseNumber(elements.genManaRound.value, 0, 0, 10);
+  const bossMax = parseNumber(elements.genBoss?.value ?? 0, 0, 0, 6);
 
   const rng = new Rng(seed);
+  const bossNames = Object.keys(BOSS_ART);
+  const bossRng = new Rng(seed ^ 0x9e3779b9);
+  const bossName =
+    bossNames.length > 0
+      ? bossRng.pick(bossNames)
+      : currentPuzzle.opponent?.name ?? "Toad Bureaucrat";
   const playable = Object.values(cardLibrary.byId).filter(
     (card) =>
       card.type === "creature" || card.type === "spell" || card.type === "effect"
+  );
+  const creaturePool = Object.values(cardLibrary.byId).filter(
+    (card) => card.type === "creature"
   );
 
   let puzzle = null;
   for (let attempt = 0; attempt < 50 && !puzzle; attempt += 1) {
     const hand = pickHand(rng, playable, handSize);
+    const bossBoard = buildBossBoard(rng, creaturePool, bossMax);
     const startState = normalizeState({
       player: {
         mana: manaCap,
@@ -463,9 +498,9 @@ function generatePuzzleFromInputs() {
         board: [],
       },
       opponent: {
-        name: currentPuzzle.opponent?.name ?? "Toad Bureaucrat",
+        name: bossName,
         health: 30,
-        board: [],
+        board: bossBoard,
       },
       manaPerRound,
       targetRounds,
@@ -515,6 +550,28 @@ function pickHand(rng, pool, count) {
     hand.push(pick.id);
   }
   return hand;
+}
+
+function buildBossBoard(rng, pool, maxCount) {
+  if (!Array.isArray(pool) || pool.length === 0 || maxCount <= 0) {
+    return [];
+  }
+  const count = rng.int(maxCount + 1);
+  const board = [];
+  for (let i = 0; i < count; i += 1) {
+    const pick = rng.pick(pool);
+    if (!pick?.stats) {
+      continue;
+    }
+    board.push({
+      card: pick.id,
+      power: pick.stats.power,
+      keywords: pick.keywords ? [...pick.keywords] : [],
+      mods: [],
+      tired: false,
+    });
+  }
+  return board;
 }
 
 function ghostWalk(startState, rng, steps) {
@@ -570,7 +627,7 @@ function materializeGhost(ghost, seed, steps, targetRounds, manaPerRound) {
     opponent: {
       name: ghost.startState.opponent.name ?? "Boss",
       health: Math.max(1, damage),
-      board: [],
+      board: ghost.startState.opponent.board ?? [],
     },
     solution: ghost.trace,
   };
@@ -631,6 +688,7 @@ function stepSolution() {
 function applyAndRender(action, isSolutionStep = false) {
   try {
     const prev = currentState;
+    const wasFinalRound = isFinalRound(prev);
     const next = applyAction(currentState, action, cardLibrary);
     damageFlash = computeDamageFlash(prev, next);
     currentState = next;
@@ -639,6 +697,11 @@ function applyAndRender(action, isSolutionStep = false) {
     pendingAction = null;
     if (isSolutionStep) {
       solutionIndex += 1;
+    }
+    if (action.type === "end" && wasFinalRound && !isWin(next)) {
+      failureState = true;
+      setStatus("Final round ended. Puzzle failed.", "warn");
+      stopAutoplay();
     }
     render();
     if (isWin(currentState)) {
@@ -693,6 +756,11 @@ function render() {
   } else {
     elements.roundsLeft.textContent = "—";
   }
+  if (elements.manaPerRoundWrap) {
+    const hideManaPerRound =
+      Number.isFinite(totalRounds) && Number(totalRounds) <= 1;
+    elements.manaPerRoundWrap.classList.toggle("hidden", hideManaPerRound);
+  }
 
   const perRoundRaw =
     currentState.manaPerRound ?? currentPuzzle.manaPerRound ?? null;
@@ -704,11 +772,15 @@ function render() {
   cachedLegalActions = getLegalActions(currentState, cardLibrary);
   if (
     pendingAction &&
-    !cachedLegalActions.some(
-      (action) =>
+    !cachedLegalActions.some((action) => {
+      if (pendingAction.type === "play") {
+        return action.type === "play" && action.card === pendingAction.card;
+      }
+      return (
         action.type === pendingAction.type &&
         action.source === pendingAction.source
-    )
+      );
+    })
   ) {
     pendingAction = null;
   }
@@ -716,7 +788,11 @@ function render() {
   const opponentSplit = splitBoardByType(currentState.opponent?.board ?? []);
   const playerSplit = splitBoardByType(currentState.player?.board ?? []);
 
-  renderBoard(elements.opponentBoard, opponentSplit.creatures, "opponent");
+  const pendingPlayTargets = getPendingPlayTargets();
+
+  renderBoard(elements.opponentBoard, opponentSplit.creatures, "opponent", {
+    pendingTargets: pendingPlayTargets,
+  });
   renderBoard(elements.opponentEffects, opponentSplit.effects, "opponent", {
     emptyText: "No effects in play.",
   });
@@ -750,6 +826,86 @@ function render() {
   if (victoryBanner) {
     victoryBanner.classList.toggle("visible", isWin(currentState));
   }
+  const failureBanner = document.getElementById("boss-failure");
+  if (failureBanner) {
+    failureBanner.classList.toggle(
+      "visible",
+      failureState && !isWin(currentState)
+    );
+  }
+
+  updateBossTarget(pendingPlayTargets);
+}
+
+function isFinalRound(state) {
+  const totalRoundsRaw = state.targetRounds ?? currentPuzzle.targetRounds;
+  const totalRounds =
+    typeof totalRoundsRaw === "number" ? totalRoundsRaw : Number(totalRoundsRaw);
+  if (!Number.isFinite(totalRounds)) {
+    return false;
+  }
+  return totalRounds - (state.turn - 1) === 1;
+}
+
+function getPendingPlayTargets() {
+  if (!pendingAction || pendingAction.type !== "play") {
+    return null;
+  }
+  const actions = cachedLegalActions.filter(
+    (action) => action.type === "play" && action.card === pendingAction.card
+  );
+  const targetActions = actions.filter((action) => action.target);
+  if (targetActions.length === 0) {
+    return null;
+  }
+  const map = new Map();
+  targetActions.forEach((action) => {
+    if (action.target) {
+      map.set(action.target, action);
+    }
+  });
+  return map;
+}
+
+function updateBossTarget(pendingTargets) {
+  const bossWrap = elements.bossArt?.closest(".boss-art");
+  if (!bossWrap) {
+    return;
+  }
+  const hasTarget = Boolean(pendingTargets?.has("opponent"));
+  bossWrap.classList.toggle("targetable", hasTarget);
+  const existing = bossWrap.querySelector(".target-icon");
+  if (!hasTarget) {
+    if (existing) {
+      existing.remove();
+    }
+    bossWrap.onclick = null;
+    return;
+  }
+  if (existing) {
+    bossWrap.onclick = () => {
+      const action = pendingTargets.get("opponent");
+      if (action) {
+        applyAndRender(action);
+      }
+    };
+    return;
+  }
+  const action = pendingTargets.get("opponent");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "target-icon";
+  button.title = "Cast on boss";
+  button.innerHTML =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a1 1 0 0 1 1 1v2.1a6 6 0 0 1 5.9 5.9H21a1 1 0 1 1 0 2h-2.1a6 6 0 0 1-5.9 5.9V20a1 1 0 1 1-2 0v-2.1a6 6 0 0 1-5.9-5.9H3a1 1 0 1 1 0-2h2.1a6 6 0 0 1 5.9-5.9V4a1 1 0 0 1 1-1zm0 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" fill="currentColor"/></svg>';
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    applyAndRender(action);
+  });
+  bossWrap.appendChild(button);
+  bossWrap.onclick = () => {
+    applyAndRender(action);
+  };
 }
 
 function renderActions() {
@@ -853,7 +1009,9 @@ function renderBoard(container, list, side, options = {}) {
     return;
   }
 
-  list.forEach((unit, index) => {
+  list.forEach((entry, index) => {
+    const unit = entry?.unit ?? entry;
+    const boardIndex = entry?.index ?? index;
     const card = document.createElement("div");
     card.className = "card";
     if (unit.uid && damageFlash.creatures.has(unit.uid)) {
@@ -869,6 +1027,12 @@ function renderBoard(container, list, side, options = {}) {
     const powerValue = unit.power ?? def?.stats?.power ?? 0;
     const isCreature = def?.type === "creature";
     const hasSacrifice = def?.keywords?.includes("sacrifice") ?? false;
+    const pendingTargets = options.pendingTargets ?? null;
+    const uidRef = unit.uid ?? null;
+    const slotRef = `opponent:slot${boardIndex}`;
+    const targetAction = pendingTargets
+      ? pendingTargets.get(uidRef ?? "") ?? pendingTargets.get(slotRef)
+      : null;
 
     const badges = document.createElement("div");
     badges.className = "card-badges";
@@ -959,7 +1123,7 @@ function renderBoard(container, list, side, options = {}) {
     }
 
     if (side === "player" && isCreature) {
-      const sourceRef = unit.uid ?? `player:slot${index}`;
+      const sourceRef = unit.uid ?? `player:slot${boardIndex}`;
       const attackActions = cachedLegalActions.filter(
         (action) => action.type === "attack" && action.source === sourceRef
       );
@@ -1073,6 +1237,25 @@ function renderBoard(container, list, side, options = {}) {
         }
       }
     }
+
+    if (side === "opponent" && targetAction) {
+      card.classList.add("targetable");
+      const targetButton = document.createElement("button");
+      targetButton.type = "button";
+      targetButton.className = "target-icon";
+      targetButton.title = "Cast here";
+      targetButton.innerHTML =
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a1 1 0 0 1 1 1v2.1a6 6 0 0 1 5.9 5.9H21a1 1 0 1 1 0 2h-2.1a6 6 0 0 1-5.9 5.9V20a1 1 0 1 1-2 0v-2.1a6 6 0 0 1-5.9-5.9H3a1 1 0 1 1 0-2h2.1a6 6 0 0 1 5.9-5.9V4a1 1 0 0 1 1-1zm0 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" fill="currentColor"/></svg>';
+      targetButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        applyAndRender(targetAction);
+      });
+      card.appendChild(targetButton);
+      card.addEventListener("click", () => {
+        applyAndRender(targetAction);
+      });
+    }
+
     container.appendChild(card);
   });
 }
@@ -1080,13 +1263,14 @@ function renderBoard(container, list, side, options = {}) {
 function splitBoardByType(list) {
   const creatures = [];
   const effects = [];
-  (list ?? []).forEach((unit) => {
+  (list ?? []).forEach((unit, index) => {
+    const entry = { unit, index };
     const def = cardLibrary.byId?.[unit.card];
     if (def?.type === "effect") {
-      effects.push(unit);
+      effects.push(entry);
       return;
     }
-    creatures.push(unit);
+    creatures.push(entry);
   });
   return { creatures, effects };
 }
@@ -1101,6 +1285,7 @@ function renderHand(container, hand) {
   hand.forEach((cardId) => {
     const chip = document.createElement("button");
     chip.className = "hand-card";
+    chip.dataset.cardId = cardId;
     const def = cardLibrary.byId?.[cardId];
     if (def?.type) {
       chip.classList.add(`type-${def.type}`);
@@ -1188,14 +1373,21 @@ function renderHand(container, hand) {
         setStatus(`Cannot play ${cardId} right now.`, "warn");
         return;
       }
-      if (playActions.length === 1) {
+      const hasTargets = playActions.some((action) => action.target);
+      if (!hasTargets) {
         applyAndRender(playActions[0]);
         return;
       }
-      const preferOpponent = playActions.find(
-        (action) => action.target === "opponent"
-      );
-      applyAndRender(preferOpponent ?? playActions[0]);
+      if (
+        pendingAction &&
+        pendingAction.type === "play" &&
+        pendingAction.card === cardId
+      ) {
+        pendingAction = null;
+      } else {
+        pendingAction = { type: "play", card: cardId };
+      }
+      render();
     });
     container.appendChild(chip);
   });
