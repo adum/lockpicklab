@@ -26,7 +26,16 @@ export interface AuraEffect {
   applies_to: "attack";
 }
 
-export type EffectDefinition = DamageEffect | BuffEffect | AuraEffect;
+export interface GrantKeywordEffect {
+  type: "grant_keyword";
+  keyword: Keyword;
+}
+
+export type EffectDefinition =
+  | DamageEffect
+  | BuffEffect
+  | AuraEffect
+  | GrantKeywordEffect;
 
 export interface CardDefinition {
   id: string;

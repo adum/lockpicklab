@@ -349,6 +349,7 @@ body::after {
 .card.targetable {
   border-color: rgba(240, 176, 78, 0.7);
   box-shadow: 0 12px 24px rgba(240, 176, 78, 0.25);
+  cursor: pointer;
 }
 
 .target-icon {
@@ -467,6 +468,7 @@ body::after {
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(10, 10, 12, 0.6);
+  position: relative;
 }
 
 .card-art img {
@@ -474,6 +476,31 @@ body::after {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.mod-icons {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: flex;
+  gap: 4px;
+  z-index: 2;
+}
+
+.mod-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(14, 12, 20, 0.85);
+  border: 1px solid rgba(212, 106, 58, 0.65);
+  color: rgba(255, 235, 210, 0.95);
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 4px 10px rgba(8, 6, 12, 0.45);
+  text-transform: uppercase;
+  cursor: help;
 }
 
 .card-desc {

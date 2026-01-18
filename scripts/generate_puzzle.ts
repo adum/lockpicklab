@@ -25,7 +25,10 @@ const bossName = bossPool.length > 0 ? bossRng.pick(bossPool) : "Toad Bureaucrat
 
 const playable = Object.values(cards.byId).filter(
   (card) =>
-    card.type === "creature" || card.type === "spell" || card.type === "effect"
+    card.type === "creature" ||
+    card.type === "spell" ||
+    card.type === "effect" ||
+    card.type === "mod"
 );
 
 function pickHand(count: number): string[] {

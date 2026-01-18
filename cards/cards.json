@@ -12,6 +12,15 @@
       ]
     },
     {
+      "id": "piercing_rune",
+      "name": "Piercing Rune",
+      "type": "mod",
+      "cost": 2,
+      "effects": [
+        {"type": "grant_keyword", "keyword": "pierce"}
+      ]
+    },
+    {
       "id": "war_banner",
       "name": "War Banner",
       "type": "effect",

@@ -52,7 +52,7 @@ Effects stay on the battlefield indefinitely. For example, a War Banner effect g
 
 
 
-Mods attach to individual creatures and may modify various attributes, such as a shield that absorbs one damage.
+Mods attach to any creature (player or boss) and permanently modify it, such as granting Pierce or a damage shield.
 
 
 

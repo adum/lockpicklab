@@ -24,6 +24,12 @@ const EFFECT_ART = {
 
 const EFFECT_PLACEHOLDER = "./assets/effects/placeholder.jpg";
 
+const MOD_ART = {
+  piercing_rune: "./assets/mods/placeholder.jpg",
+};
+
+const MOD_PLACEHOLDER = "./assets/mods/placeholder.jpg";
+
 const SPELL_ART = {
   fireball: "./assets/spells/fireball.jpg",
   spark: "./assets/spells/spark.jpg",
@@ -48,10 +54,20 @@ function formatEffects(card) {
         }
         return `Aura: +${effect.amount} ${effect.stat}`;
       }
+      if (effect.type === "grant_keyword") {
+        return `Grant ${formatKeyword(effect.keyword)}`;
+      }
       return "";
     })
     .filter(Boolean)
     .join("; ");
+}
+
+function formatKeyword(keyword) {
+  if (!keyword) {
+    return "";
+  }
+  return `${keyword.charAt(0).toUpperCase()}${keyword.slice(1)}`;
 }
 
 function renderCards(cards) {
@@ -87,7 +103,12 @@ function renderCards(cards) {
       const handCard = document.createElement("div");
       handCard.className = `hand-card type-${card.type ?? "creature"}`;
 
-      if (card.type === "creature" || card.type === "spell" || card.type === "effect") {
+      if (
+        card.type === "creature" ||
+        card.type === "spell" ||
+        card.type === "effect" ||
+        card.type === "mod"
+      ) {
         let artMap = CREATURE_ART;
         let fallback = card.type === "creature" ? CREATURE_PLACEHOLDER : null;
         if (card.type === "spell") {
@@ -96,6 +117,9 @@ function renderCards(cards) {
         } else if (card.type === "effect") {
           artMap = EFFECT_ART;
           fallback = EFFECT_PLACEHOLDER;
+        } else if (card.type === "mod") {
+          artMap = MOD_ART;
+          fallback = MOD_PLACEHOLDER;
         }
         const artSrc =
           artMap[card.id] ?? fallback;
@@ -131,7 +155,7 @@ function renderCards(cards) {
       handCard.appendChild(topRow);
       handCard.appendChild(name);
 
-      if (card.type === "spell" || card.type === "effect") {
+      if (card.type === "spell" || card.type === "effect" || card.type === "mod") {
         const desc = document.createElement("div");
         desc.className = "hand-desc";
         desc.textContent = formatEffects(card) || "—";

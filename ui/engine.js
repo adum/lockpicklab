@@ -239,10 +239,40 @@ function applyPlay(state, action, cards) {
       tired: false,
     };
     state.player.board.push(instance);
+  } else if (def.type === "mod") {
+    if (!action.target) {
+      throw new Error("Mod cards require a target creature");
+    }
+    const playerIndex = findPlayerIndexByRef(state, action.target);
+    const opponentIndex = findOpponentIndexByRef(state, action.target);
+    if (playerIndex < 0 && opponentIndex < 0) {
+      throw new Error(`Invalid mod target: ${action.target}`);
+    }
+    const target =
+      playerIndex >= 0
+        ? state.player.board[playerIndex]
+        : state.opponent.board[opponentIndex];
+    if (!isCreatureInstance(target, cards)) {
+      throw new Error(`Invalid mod target: ${action.target}`);
+    }
+    applyModEffects(target, def);
   }
 
   state.chainCount += 1;
   return state;
+}
+
+function applyModEffects(target, def) {
+  const effects = def.effects ?? [];
+  effects.forEach((effect) => {
+    if (effect.type === "grant_keyword") {
+      if (!target.keywords.includes(effect.keyword)) {
+        target.keywords.push(effect.keyword);
+      }
+    }
+  });
+  target.mods = target.mods ?? [];
+  target.mods.push(def.id);
 }
 
 function applySpellEffects(state, effects, target, cards) {
@@ -413,6 +443,27 @@ export function getLegalActions(state, cards) {
         });
         return;
       }
+    }
+
+    if (def.type === "mod") {
+      const playerTargets = state.player.board
+        .map((minion, idx) => ({ minion, idx }))
+        .filter((entry) => isCreatureInstance(entry.minion, cards))
+        .map((entry) => `player:slot${entry.idx}`);
+      const opponentTargets = state.opponent.board
+        .map((minion, idx) => ({ minion, idx }))
+        .filter((entry) => isCreatureInstance(entry.minion, cards))
+        .map((entry) => `opponent:slot${entry.idx}`);
+      if (playerTargets.length === 0 && opponentTargets.length === 0) {
+        return;
+      }
+      playerTargets.forEach((target) =>
+        actions.push({ type: "play", card: cardId, target })
+      );
+      opponentTargets.forEach((target) =>
+        actions.push({ type: "play", card: cardId, target })
+      );
+      return;
     }
 
     actions.push({ type: "play", card: cardId });

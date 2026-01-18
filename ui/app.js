@@ -18,6 +18,13 @@ const fallbackCards = {
       effects: [{ type: "damage", amount: 2, chain_amount: 4 }],
     },
     {
+      id: "piercing_rune",
+      name: "Piercing Rune",
+      type: "mod",
+      cost: 2,
+      effects: [{ type: "grant_keyword", keyword: "pierce" }],
+    },
+    {
       id: "war_banner",
       name: "War Banner",
       type: "effect",
@@ -78,7 +85,7 @@ const defaultPuzzle = {
   manaPerRound: 2,
   player: {
     mana: 5,
-    hand: ["cultist", "war_banner", "lancer", "fireball", "spark"],
+    hand: ["cultist", "piercing_rune", "war_banner", "lancer", "fireball", "spark"],
     board: [],
   },
   opponent: {
@@ -195,6 +202,12 @@ const EFFECT_ART = {
 };
 
 const EFFECT_PLACEHOLDER = "./assets/effects/placeholder.jpg";
+
+const MOD_ART = {
+  piercing_rune: "./assets/mods/placeholder.jpg",
+};
+
+const MOD_PLACEHOLDER = "./assets/mods/placeholder.jpg";
 
 const SPELL_ART = {
   fireball: "./assets/spells/fireball.jpg",
@@ -481,7 +494,10 @@ function generatePuzzleFromInputs() {
       : currentPuzzle.opponent?.name ?? "Toad Bureaucrat";
   const playable = Object.values(cardLibrary.byId).filter(
     (card) =>
-      card.type === "creature" || card.type === "spell" || card.type === "effect"
+      card.type === "creature" ||
+      card.type === "spell" ||
+      card.type === "effect" ||
+      card.type === "mod"
   );
   const creaturePool = Object.values(cardLibrary.byId).filter(
     (card) => card.type === "creature"
@@ -803,7 +819,9 @@ function render() {
     );
   }
 
-  renderBoard(elements.playerBoard, playerSplit.creatures, "player");
+  renderBoard(elements.playerBoard, playerSplit.creatures, "player", {
+    pendingTargets: pendingPlayTargets,
+  });
   renderBoard(elements.playerEffects, playerSplit.effects, "player", {
     emptyText: "No effects in play.",
   });
@@ -1029,9 +1047,13 @@ function renderBoard(container, list, side, options = {}) {
     const hasSacrifice = def?.keywords?.includes("sacrifice") ?? false;
     const pendingTargets = options.pendingTargets ?? null;
     const uidRef = unit.uid ?? null;
-    const slotRef = `opponent:slot${boardIndex}`;
+    const sidePrefix = side === "player" ? "player" : "opponent";
+    const slotRef = `${sidePrefix}:slot${boardIndex}`;
+    const listRef = `${sidePrefix}:slot${index}`;
     const targetAction = pendingTargets
-      ? pendingTargets.get(uidRef ?? "") ?? pendingTargets.get(slotRef)
+      ? pendingTargets.get(uidRef ?? "") ??
+        pendingTargets.get(slotRef) ??
+        pendingTargets.get(listRef)
       : null;
 
     const badges = document.createElement("div");
@@ -1051,7 +1073,12 @@ function renderBoard(container, list, side, options = {}) {
     badges.appendChild(powerBadge);
     badges.appendChild(manaBadge);
 
-    if (isCreature || def?.type === "spell" || def?.type === "effect") {
+    if (
+      isCreature ||
+      def?.type === "spell" ||
+      def?.type === "effect" ||
+      def?.type === "mod"
+    ) {
       let artMap = CREATURE_ART;
       let fallback = def?.type === "creature" ? CREATURE_PLACEHOLDER : null;
       if (def?.type === "spell") {
@@ -1060,6 +1087,9 @@ function renderBoard(container, list, side, options = {}) {
       } else if (def?.type === "effect") {
         artMap = EFFECT_ART;
         fallback = EFFECT_PLACEHOLDER;
+      } else if (def?.type === "mod") {
+        artMap = MOD_ART;
+        fallback = MOD_PLACEHOLDER;
       }
       const artSrc =
         artMap[def?.id ?? unit.card] ?? fallback;
@@ -1070,6 +1100,22 @@ function renderBoard(container, list, side, options = {}) {
         artImg.src = artSrc;
         artImg.alt = `${nameText} art`;
         artWrap.appendChild(artImg);
+        if (Array.isArray(unit.mods) && unit.mods.length > 0) {
+          const modsWrap = document.createElement("div");
+          modsWrap.className = "mod-icons";
+          unit.mods.forEach((modId) => {
+            const modDef = cardLibrary.byId?.[modId];
+            const modIcon = document.createElement("span");
+            modIcon.className = "mod-icon";
+            modIcon.textContent = modDef?.name?.[0]?.toUpperCase() ?? "M";
+            const desc = modDef ? formatCardDescription(modDef) : "";
+            if (modDef?.name || desc) {
+              modIcon.dataset.tooltip = `${modDef?.name ?? "Mod"}${desc ? `: ${desc}` : ""}`;
+            }
+            modsWrap.appendChild(modIcon);
+          });
+          artWrap.appendChild(modsWrap);
+        }
         card.appendChild(artWrap);
       }
     }
@@ -1079,7 +1125,7 @@ function renderBoard(container, list, side, options = {}) {
     name.textContent = nameText;
 
     let desc = null;
-    if (def?.type === "spell" || def?.type === "effect") {
+    if (def?.type === "spell" || def?.type === "effect" || def?.type === "mod") {
       const descText = formatCardDescription(def);
       if (descText) {
         desc = document.createElement("div");
@@ -1141,7 +1187,8 @@ function renderBoard(container, list, side, options = {}) {
         attackButton.disabled = attackActions.length === 0;
         attackButton.innerHTML =
           '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.4 3.6l6 6-2.1 2.1-1.4-1.4-4.4 4.4 1.4 1.4-2.1 2.1-1.4-1.4-6 6-1.9-1.9 6-6-1.4-1.4 2.1-2.1 1.4 1.4 4.4-4.4-1.4-1.4 2.1-2.1z" fill="currentColor"/></svg>';
-        attackButton.addEventListener("click", () => {
+        attackButton.addEventListener("click", (event) => {
+          event.stopPropagation();
           if (attackActions.length === 0) {
             setStatus("No legal attacks for that creature.", "warn");
             return;
@@ -1171,7 +1218,8 @@ function renderBoard(container, list, side, options = {}) {
           sacrificeButton.disabled = activateActions.length === 0;
           sacrificeButton.innerHTML =
             '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c2.8 0 5 2.2 5 5 0 2-1.1 3.6-2.7 4.4.3.7.7 1.6.7 2.6 0 2.8-1.9 5-3 6-1.1-1-3-3.2-3-6 0-1 .4-1.9.7-2.6C8.1 10.6 7 9 7 7c0-2.8 2.2-5 5-5zm-2.2 6.2c.7 0 1.3-.6 1.3-1.3S10.5 5.6 9.8 5.6s-1.3.6-1.3 1.3.6 1.3 1.3 1.3zm4.4 0c.7 0 1.3-.6 1.3-1.3s-.6-1.3-1.3-1.3-1.3.6-1.3 1.3.6 1.3 1.3 1.3z" fill="currentColor"/></svg>';
-          sacrificeButton.addEventListener("click", () => {
+          sacrificeButton.addEventListener("click", (event) => {
+            event.stopPropagation();
             if (activateActions.length === 0) {
               setStatus("No sacrifice targets for that creature.", "warn");
               return;
@@ -1208,7 +1256,8 @@ function renderBoard(container, list, side, options = {}) {
             const targetBtn = document.createElement("button");
             targetBtn.className = "target-button";
             targetBtn.textContent = describeRef(action.target, currentState);
-            targetBtn.addEventListener("click", () => {
+            targetBtn.addEventListener("click", (event) => {
+              event.stopPropagation();
               applyAndRender(action);
             });
             targetsRow.appendChild(targetBtn);
@@ -1228,7 +1277,8 @@ function renderBoard(container, list, side, options = {}) {
             const targetBtn = document.createElement("button");
             targetBtn.className = "target-button";
             targetBtn.textContent = describeRef(action.target, currentState);
-            targetBtn.addEventListener("click", () => {
+            targetBtn.addEventListener("click", (event) => {
+              event.stopPropagation();
               applyAndRender(action);
             });
             targetsRow.appendChild(targetBtn);
@@ -1238,7 +1288,7 @@ function renderBoard(container, list, side, options = {}) {
       }
     }
 
-    if (side === "opponent" && targetAction) {
+    if (targetAction) {
       card.classList.add("targetable");
       const targetButton = document.createElement("button");
       targetButton.type = "button";
@@ -1294,7 +1344,12 @@ function renderHand(container, hand) {
     const cost = def?.cost ?? "?";
     const power = def?.stats?.power ?? null;
 
-    if (def?.type === "creature" || def?.type === "spell" || def?.type === "effect") {
+    if (
+      def?.type === "creature" ||
+      def?.type === "spell" ||
+      def?.type === "effect" ||
+      def?.type === "mod"
+    ) {
       let artMap = CREATURE_ART;
       let fallback = def?.type === "creature" ? CREATURE_PLACEHOLDER : null;
       if (def?.type === "spell") {
@@ -1303,6 +1358,9 @@ function renderHand(container, hand) {
       } else if (def?.type === "effect") {
         artMap = EFFECT_ART;
         fallback = EFFECT_PLACEHOLDER;
+      } else if (def?.type === "mod") {
+        artMap = MOD_ART;
+        fallback = MOD_PLACEHOLDER;
       }
       const artSrc =
         artMap[def?.id ?? cardId] ?? fallback;
@@ -1338,7 +1396,7 @@ function renderHand(container, hand) {
     chip.appendChild(topRow);
     chip.appendChild(nameEl);
 
-    if (def?.type === "spell" || def?.type === "effect") {
+    if (def?.type === "spell" || def?.type === "effect" || def?.type === "mod") {
       const descText = formatCardDescription(def);
       if (descText) {
         const descEl = document.createElement("div");
@@ -1373,9 +1431,9 @@ function renderHand(container, hand) {
         setStatus(`Cannot play ${cardId} right now.`, "warn");
         return;
       }
-      const hasTargets = playActions.some((action) => action.target);
-      if (!hasTargets) {
-        applyAndRender(playActions[0]);
+      const targetedActions = playActions.filter((action) => action.target);
+      if (targetedActions.length <= 1) {
+        applyAndRender(targetedActions[0] ?? playActions[0]);
         return;
       }
       if (
@@ -1455,9 +1513,20 @@ function formatCardDescription(def) {
       } else {
         parts.push(`Aura: +${effect.amount} ${effect.stat}`);
       }
+      return;
+    }
+    if (effect.type === "grant_keyword") {
+      parts.push(`Grant ${formatKeyword(effect.keyword)}`);
     }
   });
   return parts.join("; ");
+}
+
+function formatKeyword(keyword) {
+  if (!keyword) {
+    return "";
+  }
+  return `${keyword.charAt(0).toUpperCase()}${keyword.slice(1)}`;
 }
 
 initTooltips();

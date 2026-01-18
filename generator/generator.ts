@@ -137,7 +137,10 @@ export function obfuscate(
   const hand = [...puzzle.player.hand];
   const pool = Object.values(cards.byId).filter(
     (card) =>
-      card.type === "creature" || card.type === "spell" || card.type === "effect"
+      card.type === "creature" ||
+      card.type === "spell" ||
+      card.type === "effect" ||
+      card.type === "mod"
   );
   const extraCards = options?.extraCards ?? Math.max(0, 5 - hand.length);
 
