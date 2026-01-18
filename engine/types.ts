@@ -19,7 +19,14 @@ export interface BuffEffect {
   requires?: "sacrifice_self";
 }
 
-export type EffectDefinition = DamageEffect | BuffEffect;
+export interface AuraEffect {
+  type: "aura";
+  stat: "power";
+  amount: number;
+  applies_to: "attack";
+}
+
+export type EffectDefinition = DamageEffect | BuffEffect | AuraEffect;
 
 export interface CardDefinition {
   id: string;

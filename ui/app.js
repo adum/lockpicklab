@@ -5,6 +5,7 @@ import {
   isWin,
   normalizeState,
 } from "./engine.js";
+import { initTooltips } from "./tooltip.js";
 
 const fallbackCards = {
   cards: [
@@ -15,6 +16,13 @@ const fallbackCards = {
       cost: 1,
       keywords: ["chain"],
       effects: [{ type: "damage", amount: 2, chain_amount: 4 }],
+    },
+    {
+      id: "war_banner",
+      name: "War Banner",
+      type: "effect",
+      cost: 2,
+      effects: [{ type: "aura", stat: "power", amount: 1, applies_to: "attack" }],
     },
     {
       id: "cultist",
@@ -65,12 +73,12 @@ const defaultPuzzle = {
   id: "puzzle_0001",
   difficulty: "hard",
   seed: 8842,
-  tags: ["guard", "pierce", "sacrifice"],
+  tags: ["guard", "pierce", "sacrifice", "effect"],
   targetRounds: 2,
   manaPerRound: 2,
   player: {
     mana: 5,
-    hand: ["cultist", "lancer", "fireball", "spark"],
+    hand: ["cultist", "war_banner", "lancer", "fireball", "spark"],
     board: [],
   },
   opponent: {
@@ -106,7 +114,11 @@ const elements = {
   bossName: document.getElementById("boss-name"),
   bossArt: document.getElementById("boss-art"),
   playerMana: document.getElementById("player-mana"),
+  opponentEffectsSection: document.getElementById("opponent-effects-section"),
+  opponentEffects: document.getElementById("opponent-effects"),
   opponentBoard: document.getElementById("opponent-board"),
+  playerEffectsSection: document.getElementById("player-effects-section"),
+  playerEffects: document.getElementById("player-effects"),
   playerBoard: document.getElementById("player-board"),
   playerHand: document.getElementById("player-hand"),
   loadExample: document.getElementById("load-example"),
@@ -409,7 +421,8 @@ function generatePuzzleFromInputs() {
 
   const rng = new Rng(seed);
   const playable = Object.values(cardLibrary.byId).filter(
-    (card) => card.type === "creature" || card.type === "spell"
+    (card) =>
+      card.type === "creature" || card.type === "spell" || card.type === "effect"
   );
 
   let puzzle = null;
@@ -672,8 +685,30 @@ function render() {
     pendingAction = null;
   }
 
-  renderBoard(elements.opponentBoard, currentState.opponent?.board ?? [], "opponent");
-  renderBoard(elements.playerBoard, currentState.player?.board ?? [], "player");
+  const opponentSplit = splitBoardByType(currentState.opponent?.board ?? []);
+  const playerSplit = splitBoardByType(currentState.player?.board ?? []);
+
+  renderBoard(elements.opponentBoard, opponentSplit.creatures, "opponent");
+  renderBoard(elements.opponentEffects, opponentSplit.effects, "opponent", {
+    emptyText: "No effects in play.",
+  });
+  if (elements.opponentEffectsSection) {
+    elements.opponentEffectsSection.classList.toggle(
+      "hidden",
+      opponentSplit.effects.length === 0
+    );
+  }
+
+  renderBoard(elements.playerBoard, playerSplit.creatures, "player");
+  renderBoard(elements.playerEffects, playerSplit.effects, "player", {
+    emptyText: "No effects in play.",
+  });
+  if (elements.playerEffectsSection) {
+    elements.playerEffectsSection.classList.toggle(
+      "hidden",
+      playerSplit.effects.length === 0
+    );
+  }
   renderHand(elements.playerHand, currentState.player?.hand ?? []);
   renderActions();
   renderLog();
@@ -777,11 +812,16 @@ function describeRef(ref, state) {
   return ref;
 }
 
-function renderBoard(container, list, side) {
+function renderBoard(container, list, side, options = {}) {
+  if (!container) {
+    return;
+  }
   container.innerHTML = "";
   if (!Array.isArray(list) || list.length === 0) {
-    container.innerHTML =
-      '<div class="placeholder">No creatures on board.</div>';
+    if (options.showEmpty !== false) {
+      const emptyText = options.emptyText ?? "No creatures on board.";
+      container.innerHTML = `<div class="placeholder">${emptyText}</div>`;
+    }
     return;
   }
 
@@ -840,8 +880,8 @@ function renderBoard(container, list, side) {
     name.textContent = nameText;
 
     let desc = null;
-    if (def?.type === "spell") {
-      const descText = formatSpellDescription(def);
+    if (def?.type === "spell" || def?.type === "effect") {
+      const descText = formatCardDescription(def);
       if (descText) {
         desc = document.createElement("div");
         desc.className = "card-desc";
@@ -866,7 +906,7 @@ function renderBoard(container, list, side) {
         }
         keywords.appendChild(tag);
       });
-    } else {
+    } else if (isCreature) {
       const tag = document.createElement("span");
       tag.className = "tag";
       tag.textContent = "vanilla";
@@ -879,7 +919,9 @@ function renderBoard(container, list, side) {
     if (desc) {
       card.appendChild(desc);
     }
-    card.appendChild(keywords);
+    if (keywords.childElementCount > 0) {
+      card.appendChild(keywords);
+    }
 
     if (side === "player" && isCreature) {
       const sourceRef = unit.uid ?? `player:slot${index}`;
@@ -1000,6 +1042,20 @@ function renderBoard(container, list, side) {
   });
 }
 
+function splitBoardByType(list) {
+  const creatures = [];
+  const effects = [];
+  (list ?? []).forEach((unit) => {
+    const def = cardLibrary.byId?.[unit.card];
+    if (def?.type === "effect") {
+      effects.push(unit);
+      return;
+    }
+    creatures.push(unit);
+  });
+  return { creatures, effects };
+}
+
 function renderHand(container, hand) {
   container.innerHTML = "";
   if (!Array.isArray(hand) || hand.length === 0) {
@@ -1055,8 +1111,8 @@ function renderHand(container, hand) {
     chip.appendChild(topRow);
     chip.appendChild(nameEl);
 
-    if (def?.type === "spell") {
-      const descText = formatSpellDescription(def);
+    if (def?.type === "spell" || def?.type === "effect") {
+      const descText = formatCardDescription(def);
       if (descText) {
         const descEl = document.createElement("div");
         descEl.className = "hand-desc";
@@ -1144,7 +1200,7 @@ function triggerBossFlash() {
   badge.classList.add("boss-flash");
 }
 
-function formatSpellDescription(def) {
+function formatCardDescription(def) {
   if (!def?.effects || def.effects.length === 0) {
     return "";
   }
@@ -1157,11 +1213,20 @@ function formatSpellDescription(def) {
     }
     if (effect.type === "buff") {
       parts.push(`Give +${effect.amount} power`);
+      return;
+    }
+    if (effect.type === "aura") {
+      if (effect.stat === "power" && effect.applies_to === "attack") {
+        parts.push(`Your creatures get +${effect.amount} power on attack`);
+      } else {
+        parts.push(`Aura: +${effect.amount} ${effect.stat}`);
+      }
     }
   });
   return parts.join("; ");
 }
 
+initTooltips();
 loadCardLibrary().then(() => {
   populatePuzzleSelect();
   elements.genSeedRandom.checked = true;

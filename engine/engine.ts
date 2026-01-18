@@ -57,9 +57,16 @@ function findOpponentIndexByRef(state: GameState, ref: string): number {
   return state.opponent.board.findIndex((m) => m.card === ref);
 }
 
-function enemyGuardIndexes(state: GameState): number[] {
+function isCreatureInstance(instance: CardInstance, cards: CardLibrary): boolean {
+  return cards.byId[instance.card]?.type === "creature";
+}
+
+function enemyGuardIndexes(state: GameState, cards: CardLibrary): number[] {
   const indexes: number[] = [];
   state.opponent.board.forEach((minion, idx) => {
+    if (!isCreatureInstance(minion, cards)) {
+      return;
+    }
     if (hasKeyword(minion, GUARD)) {
       indexes.push(idx);
     }
@@ -67,8 +74,13 @@ function enemyGuardIndexes(state: GameState): number[] {
   return indexes;
 }
 
-function removeDead(board: CardInstance[]): CardInstance[] {
-  return board.filter((minion) => minion.power > 0);
+function removeDead(board: CardInstance[], cards: CardLibrary): CardInstance[] {
+  return board.filter((minion) => {
+    if (!isCreatureInstance(minion, cards)) {
+      return true;
+    }
+    return minion.power > 0;
+  });
 }
 
 function applyDamageToMinion(minion: CardInstance, amount: number): void {
@@ -85,6 +97,22 @@ function getCardDef(cards: CardLibrary, cardId: string): CardDefinition {
     throw new Error(`Unknown card: ${cardId}`);
   }
   return def;
+}
+
+function getPlayerAttackAuraBonus(state: GameState, cards: CardLibrary): number {
+  let bonus = 0;
+  state.player.board.forEach((instance) => {
+    const def = cards.byId[instance.card];
+    if (!def || def.type !== "effect") {
+      return;
+    }
+    def.effects?.forEach((effect) => {
+      if (effect.type === "aura" && effect.stat === "power" && effect.applies_to === "attack") {
+        bonus += effect.amount;
+      }
+    });
+  });
+  return bonus;
 }
 
 export function isWin(state: GameState): boolean {
@@ -139,7 +167,17 @@ function applyPlay(state: GameState, action: PlayAction, cards: CardLibrary): Ga
     };
     state.player.board.push(instance);
   } else if (def.type === "spell") {
-    applySpellEffects(state, def.effects ?? [], action.target);
+    applySpellEffects(state, def.effects ?? [], action.target, cards);
+  } else if (def.type === "effect") {
+    const instance: CardInstance = {
+      uid: allocateUid(state, "p"),
+      card: def.id,
+      power: def.stats?.power ?? 0,
+      keywords: def.keywords ? [...def.keywords] : [],
+      mods: [],
+      tired: false,
+    };
+    state.player.board.push(instance);
   }
 
   state.chainCount += 1;
@@ -149,13 +187,14 @@ function applyPlay(state: GameState, action: PlayAction, cards: CardLibrary): Ga
 function applySpellEffects(
   state: GameState,
   effects: EffectDefinition[],
-  target: string | undefined
+  target: string | undefined,
+  cards: CardLibrary
 ): void {
   for (const effect of effects) {
     if (effect.type === "damage") {
       const base = effect.amount;
       const amount = state.chainCount > 0 && effect.chain_amount ? effect.chain_amount : base;
-      applySpellDamage(state, amount, target);
+      applySpellDamage(state, amount, target, cards);
     }
   }
 }
@@ -163,7 +202,8 @@ function applySpellEffects(
 function applySpellDamage(
   state: GameState,
   amount: number,
-  target: string | undefined
+  target: string | undefined,
+  cards: CardLibrary
 ): void {
   if (!target || target === "opponent") {
     applyDamageToOpponent(state, amount);
@@ -175,8 +215,12 @@ function applySpellDamage(
     if (index < 0) {
       throw new Error(`Invalid spell target: ${target}`);
     }
-    applyDamageToMinion(state.opponent.board[index], amount);
-    state.opponent.board = removeDead(state.opponent.board);
+    const defender = state.opponent.board[index];
+    if (!isCreatureInstance(defender, cards)) {
+      throw new Error(`Invalid spell target: ${target}`);
+    }
+    applyDamageToMinion(defender, amount);
+    state.opponent.board = removeDead(state.opponent.board, cards);
     return;
   }
 
@@ -189,19 +233,26 @@ function applyAttack(state: GameState, action: AttackAction, cards: CardLibrary)
     throw new Error(`Invalid attack source: ${action.source}`);
   }
   const attacker = state.player.board[sourceIndex];
+  if (!isCreatureInstance(attacker, cards)) {
+    throw new Error(`Source is not a creature: ${action.source}`);
+  }
   if (attacker.tired) {
     throw new Error(`Source is tired: ${action.source}`);
   }
 
-  const guardIndexes = enemyGuardIndexes(state);
+  const guardIndexes = enemyGuardIndexes(state, cards);
   const mustHitGuard = guardIndexes.length > 0;
-  const hasEnemyMinions = state.opponent.board.length > 0;
+  const hasEnemyMinions = state.opponent.board.some((minion) =>
+    isCreatureInstance(minion, cards)
+  );
+  const attackBonus = getPlayerAttackAuraBonus(state, cards);
+  const attackPower = attacker.power + attackBonus;
 
   if (action.target === "opponent") {
     if (hasEnemyMinions) {
       throw new Error("Enemy minions are present; cannot attack opponent");
     }
-    applyDamageToOpponent(state, attacker.power);
+    applyDamageToOpponent(state, attackPower);
     attacker.tired = true;
     return state;
   }
@@ -215,20 +266,23 @@ function applyAttack(state: GameState, action: AttackAction, cards: CardLibrary)
   }
 
   const defender = state.opponent.board[targetIndex];
+  if (!isCreatureInstance(defender, cards)) {
+    throw new Error(`Invalid attack target: ${action.target}`);
+  }
   const defenderPowerBefore = defender.power;
-  applyDamageToMinion(defender, attacker.power);
+  applyDamageToMinion(defender, attackPower);
   applyDamageToMinion(attacker, defender.power);
 
-  if (hasKeyword(attacker, PIERCE) && attacker.power > defenderPowerBefore) {
-    const excess = attacker.power - defenderPowerBefore;
+  if (hasKeyword(attacker, PIERCE) && attackPower > defenderPowerBefore) {
+    const excess = attackPower - defenderPowerBefore;
     if (excess > 0) {
       applyDamageToOpponent(state, excess);
     }
   }
 
   attacker.tired = true;
-  state.player.board = removeDead(state.player.board);
-  state.opponent.board = removeDead(state.opponent.board);
+  state.player.board = removeDead(state.player.board, cards);
+  state.opponent.board = removeDead(state.opponent.board, cards);
 
   return state;
 }
@@ -244,7 +298,7 @@ function applyActivate(
   }
   const source = state.player.board[sourceIndex];
   const def = cards.byId[source.card];
-  if (!def || !hasKeyword(source, SACRIFICE)) {
+  if (!def || def.type !== "creature" || !hasKeyword(source, SACRIFICE)) {
     throw new Error("Source has no sacrificial ability");
   }
   if (!action.target) {
@@ -287,8 +341,9 @@ function applyEnd(state: GameState): GameState {
 
 export function getLegalActions(state: GameState, cards: CardLibrary): Action[] {
   const actions: Action[] = [];
-  const guardIndexes = enemyGuardIndexes(state);
-  const canHitOpponent = state.opponent.board.length === 0;
+  const guardIndexes = enemyGuardIndexes(state, cards);
+  const canHitOpponent =
+    state.opponent.board.filter((minion) => isCreatureInstance(minion, cards)).length === 0;
 
   for (const cardId of state.player.hand) {
     const def = cards.byId[cardId];
@@ -303,7 +358,10 @@ export function getLegalActions(state: GameState, cards: CardLibrary): Action[] 
       const hasDamage = def.effects?.some((effect) => effect.type === "damage") ?? false;
       if (hasDamage) {
         actions.push({ type: "play", card: cardId, target: "opponent" });
-        state.opponent.board.forEach((_, idx) => {
+        state.opponent.board.forEach((enemy, idx) => {
+          if (!isCreatureInstance(enemy, cards)) {
+            return;
+          }
           actions.push({ type: "play", card: cardId, target: `opponent:slot${idx}` });
         });
         continue;
@@ -314,6 +372,9 @@ export function getLegalActions(state: GameState, cards: CardLibrary): Action[] 
   }
 
   state.player.board.forEach((minion, idx) => {
+    if (!isCreatureInstance(minion, cards)) {
+      return;
+    }
     if (minion.tired) {
       return;
     }
@@ -324,6 +385,9 @@ export function getLegalActions(state: GameState, cards: CardLibrary): Action[] 
     }
 
     state.opponent.board.forEach((enemy, enemyIndex) => {
+      if (!isCreatureInstance(enemy, cards)) {
+        return;
+      }
       if (guardIndexes.length > 0 && !guardIndexes.includes(enemyIndex)) {
         return;
       }

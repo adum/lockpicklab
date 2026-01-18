@@ -96,6 +96,10 @@ body::after {
 .brand-subtitle {
   color: var(--muted);
   font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .brand-subtitle a {
@@ -107,6 +111,12 @@ body::after {
 .brand-subtitle a:hover {
   color: var(--accent-2);
   border-bottom-color: var(--accent-2);
+}
+
+.brand-links {
+  display: inline-flex;
+  gap: 12px;
+  font-size: 0.85rem;
 }
 
 .meta {
@@ -167,6 +177,30 @@ body::after {
   display: grid;
   gap: 16px;
   position: relative;
+}
+
+.board-section {
+  display: grid;
+  gap: 8px;
+}
+
+.board-section.hidden {
+  display: none;
+}
+
+.row-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.effects-row {
+  background: rgba(18, 24, 20, 0.6);
+  border: 1px dashed rgba(86, 140, 86, 0.35);
+  border-radius: 16px;
+  padding: 10px;
+  min-height: 110px;
 }
 
 .boss-header-row {
@@ -276,70 +310,6 @@ body::after {
 
 .boss-stat.boss-flash {
   animation: bossPulse 0.5s ease;
-}
-
-.stat[data-tooltip] {
-  position: relative;
-}
-
-.stat[data-tooltip]:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: 130%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(36, 74, 98, 0.95);
-  color: #f6f2eb;
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  white-space: nowrap;
-  z-index: 10;
-  box-shadow: 0 8px 18px rgba(31, 26, 23, 0.2);
-}
-
-.stat[data-tooltip]:hover::before {
-  content: "";
-  position: absolute;
-  bottom: 118%;
-  left: 50%;
-  transform: translateX(-50%);
-  border-width: 6px 6px 0 6px;
-  border-style: solid;
-  border-color: rgba(36, 74, 98, 0.95) transparent transparent transparent;
-  z-index: 9;
-}
-
-.badge[data-tooltip] {
-  position: relative;
-}
-
-.badge[data-tooltip]:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: 130%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(36, 74, 98, 0.95);
-  color: #f6f2eb;
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-size: 0.7rem;
-  white-space: nowrap;
-  z-index: 10;
-  box-shadow: 0 8px 18px rgba(31, 26, 23, 0.2);
-}
-
-.badge[data-tooltip]:hover::before {
-  content: "";
-  position: absolute;
-  bottom: 118%;
-  left: 50%;
-  transform: translateX(-50%);
-  border-width: 6px 6px 0 6px;
-  border-style: solid;
-  border-color: rgba(36, 74, 98, 0.95) transparent transparent transparent;
-  z-index: 9;
 }
 
 .board-row {
@@ -543,34 +513,46 @@ body::after {
   position: relative;
 }
 
-.tag[data-tooltip]:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: 125%;
-  left: 50%;
-  transform: translateX(-50%);
+.tooltip {
+  position: fixed;
+  z-index: 9999;
+  max-width: min(260px, calc(100vw - 24px));
+  padding: 6px 10px;
+  border-radius: 8px;
   background: rgba(36, 74, 98, 0.95);
   color: #f6f2eb;
-  padding: 6px 8px;
-  border-radius: 8px;
-  font-size: 0.7rem;
-  text-transform: none;
+  font-size: 0.72rem;
+  line-height: 1.2;
   letter-spacing: 0;
-  white-space: nowrap;
-  z-index: 10;
-  box-shadow: 0 8px 18px rgba(31, 26, 23, 0.2);
+  text-transform: none;
+  white-space: normal;
+  box-shadow: 0 8px 18px rgba(31, 26, 23, 0.25);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  pointer-events: none;
 }
 
-.tag[data-tooltip]:hover::before {
+.tooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.tooltip::after {
   content: "";
   position: absolute;
-  bottom: 110%;
-  left: 50%;
+  left: var(--arrow-left, 50%);
   transform: translateX(-50%);
   border-width: 6px 6px 0 6px;
   border-style: solid;
   border-color: rgba(36, 74, 98, 0.95) transparent transparent transparent;
-  z-index: 9;
+  top: 100%;
+}
+
+.tooltip[data-placement="bottom"]::after {
+  top: -6px;
+  border-width: 0 6px 6px 6px;
+  border-color: transparent transparent rgba(36, 74, 98, 0.95) transparent;
 }
 
 .hand {
@@ -596,6 +578,8 @@ body::after {
   cursor: pointer;
   font-family: inherit;
   min-width: 110px;
+  width: clamp(120px, 18vw, 170px);
+  max-width: 180px;
   color: var(--ink);
 }
 
@@ -850,7 +834,7 @@ body::after {
 
 #puzzle-json {
   width: 100%;
-  min-height: 280px;
+  min-height: 96px;
   border-radius: 16px;
   border: 1px solid var(--border);
   padding: 14px;

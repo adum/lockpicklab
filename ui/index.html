@@ -13,7 +13,11 @@
         <div>
           <div class="brand-title">Lockpick Lab</div>
           <div class="brand-subtitle">
-            <a href="./rules.html">Puzzle board + playback sandbox</a>
+            <span>Puzzle board + playback sandbox</span>
+            <span class="brand-links">
+              <a href="./rules.html">Rules</a>
+              <a href="./cards.html">Cards</a>
+            </span>
           </div>
         </div>
       </div>
@@ -64,6 +68,10 @@
               </div>
             </div>
           </div>
+          <div class="board-section effects-section hidden" id="opponent-effects-section">
+            <div class="row-label">Effects</div>
+            <div class="board-row effects-row" id="opponent-effects"></div>
+          </div>
           <div class="board-row" id="opponent-board"></div>
         </div>
 
@@ -78,6 +86,10 @@
             >
               Mana <span id="player-mana">0</span>
             </div>
+          </div>
+          <div class="board-section effects-section hidden" id="player-effects-section">
+            <div class="row-label">Effects</div>
+            <div class="board-row effects-row" id="player-effects"></div>
           </div>
           <div class="board-row" id="player-board"></div>
           <div class="hand" id="player-hand"></div>

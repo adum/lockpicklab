@@ -2,12 +2,12 @@
   "id": "puzzle_0001",
   "difficulty": "hard",
   "seed": 8842,
-  "tags": ["guard", "pierce", "sacrifice"],
+  "tags": ["guard", "pierce", "sacrifice", "effect"],
   "targetRounds": 2,
   "manaPerRound": 2,
   "player": {
     "mana": 5,
-    "hand": ["cultist", "lancer", "fireball", "spark"],
+    "hand": ["cultist", "war_banner", "lancer", "fireball", "spark"],
     "board": []
   },
   "opponent": {

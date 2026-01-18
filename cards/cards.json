@@ -12,6 +12,15 @@
       ]
     },
     {
+      "id": "war_banner",
+      "name": "War Banner",
+      "type": "effect",
+      "cost": 2,
+      "effects": [
+        {"type": "aura", "stat": "power", "amount": 1, "applies_to": "attack"}
+      ]
+    },
+    {
       "id": "cultist",
       "name": "Cultist",
       "type": "creature",

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lockpick Lab Cards</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./cards.css" />
+  </head>
+  <body>
+    <header class="cards-hero">
+      <div class="cards-hero-inner">
+        <a class="cards-back" href="./index.html">← Back to the board</a>
+        <div class="cards-title-row">
+          <h1>Card Library</h1>
+          <input
+            id="card-search"
+            type="search"
+            placeholder="Search cards"
+            aria-label="Search cards"
+          />
+        </div>
+        <p class="cards-subtitle">
+          Complete list of available cards, their costs, and effects.
+        </p>
+      </div>
+    </header>
+
+    <main class="cards-content">
+      <div id="cards-container" class="cards-grid"></div>
+    </main>
+
+    <script type="module" src="./cards.js"></script>
+  </body>
+</html>

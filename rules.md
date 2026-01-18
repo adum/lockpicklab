@@ -48,7 +48,7 @@ Spells do instant things like damage the boss or make a creature not tired. Some
 
 
 
-Effects stay on the battlefield indefinitely. For example, all player creatures get plus 1 to power when attacking the boss.
+Effects stay on the battlefield indefinitely. For example, a War Banner effect gives all player creatures +1 power while attacking.
 
 
 
