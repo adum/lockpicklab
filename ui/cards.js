@@ -13,9 +13,16 @@ const KEYWORD_TOOLTIPS = {
 
 const CREATURE_ART = {
   cultist: "./assets/creatures/cultist.jpg",
+  lancer: "./assets/creatures/lancer.jpg",
 };
 
 const CREATURE_PLACEHOLDER = "./assets/creatures/placeholder.jpg";
+
+const EFFECT_ART = {
+  war_banner: "./assets/effects/placeholder.jpg",
+};
+
+const EFFECT_PLACEHOLDER = "./assets/effects/placeholder.jpg";
 
 const SPELL_ART = {
   fireball: "./assets/spells/fireball.jpg",
@@ -80,10 +87,18 @@ function renderCards(cards) {
       const handCard = document.createElement("div");
       handCard.className = `hand-card type-${card.type ?? "creature"}`;
 
-      if (card.type === "creature" || card.type === "spell") {
-        const artMap = card.type === "spell" ? SPELL_ART : CREATURE_ART;
+      if (card.type === "creature" || card.type === "spell" || card.type === "effect") {
+        let artMap = CREATURE_ART;
+        let fallback = card.type === "creature" ? CREATURE_PLACEHOLDER : null;
+        if (card.type === "spell") {
+          artMap = SPELL_ART;
+          fallback = null;
+        } else if (card.type === "effect") {
+          artMap = EFFECT_ART;
+          fallback = EFFECT_PLACEHOLDER;
+        }
         const artSrc =
-          artMap[card.id] ?? (card.type === "creature" ? CREATURE_PLACEHOLDER : null);
+          artMap[card.id] ?? fallback;
         if (artSrc) {
           const artWrap = document.createElement("div");
           artWrap.className = "hand-art";

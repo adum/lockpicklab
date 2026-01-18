@@ -106,6 +106,21 @@ const defaultPuzzle = {
   },
 };
 
+const clockworkPuzzle = {
+  ...structuredClone(defaultPuzzle),
+  id: "puzzle_0002",
+  seed: 9124,
+  opponent: {
+    ...defaultPuzzle.opponent,
+    name: "Clockwork King",
+  },
+  metadata: {
+    version: 1,
+    description:
+      "Clockwork King oversees the same opening, but brings a new machine aesthetic.",
+  },
+};
+
 const elements = {
   puzzleSelect: document.getElementById("puzzle-select"),
   puzzleDifficulty: document.getElementById("puzzle-difficulty"),
@@ -154,17 +169,30 @@ const PUZZLE_LIBRARY = [
     label: "Puzzle 1 — Lancer Strike",
     data: defaultPuzzle,
   },
+  {
+    id: "puzzle_0002",
+    label: "Puzzle 2 — Clockwork King",
+    data: clockworkPuzzle,
+  },
 ];
 
 const BOSS_ART = {
   "Toad Bureaucrat": "./assets/boss/toad_dark.jpg",
+  "Clockwork King": "./assets/boss/clockwork.jpg",
 };
 
 const CREATURE_ART = {
   cultist: "./assets/creatures/cultist.jpg",
+  lancer: "./assets/creatures/lancer.jpg",
 };
 
 const CREATURE_PLACEHOLDER = "./assets/creatures/placeholder.jpg";
+
+const EFFECT_ART = {
+  war_banner: "./assets/effects/placeholder.jpg",
+};
+
+const EFFECT_PLACEHOLDER = "./assets/effects/placeholder.jpg";
 
 const SPELL_ART = {
   fireball: "./assets/spells/fireball.jpg",
@@ -859,11 +887,18 @@ function renderBoard(container, list, side, options = {}) {
     badges.appendChild(powerBadge);
     badges.appendChild(manaBadge);
 
-    if (isCreature || def?.type === "spell") {
-      const artMap = def?.type === "spell" ? SPELL_ART : CREATURE_ART;
+    if (isCreature || def?.type === "spell" || def?.type === "effect") {
+      let artMap = CREATURE_ART;
+      let fallback = def?.type === "creature" ? CREATURE_PLACEHOLDER : null;
+      if (def?.type === "spell") {
+        artMap = SPELL_ART;
+        fallback = null;
+      } else if (def?.type === "effect") {
+        artMap = EFFECT_ART;
+        fallback = EFFECT_PLACEHOLDER;
+      }
       const artSrc =
-        artMap[def?.id ?? unit.card] ??
-        (def?.type === "creature" ? CREATURE_PLACEHOLDER : null);
+        artMap[def?.id ?? unit.card] ?? fallback;
       if (artSrc) {
         const artWrap = document.createElement("div");
         artWrap.className = "card-art";
@@ -1074,11 +1109,18 @@ function renderHand(container, hand) {
     const cost = def?.cost ?? "?";
     const power = def?.stats?.power ?? null;
 
-    if (def?.type === "creature" || def?.type === "spell") {
-      const artMap = def?.type === "spell" ? SPELL_ART : CREATURE_ART;
+    if (def?.type === "creature" || def?.type === "spell" || def?.type === "effect") {
+      let artMap = CREATURE_ART;
+      let fallback = def?.type === "creature" ? CREATURE_PLACEHOLDER : null;
+      if (def?.type === "spell") {
+        artMap = SPELL_ART;
+        fallback = null;
+      } else if (def?.type === "effect") {
+        artMap = EFFECT_ART;
+        fallback = EFFECT_PLACEHOLDER;
+      }
       const artSrc =
-        artMap[def?.id ?? cardId] ??
-        (def?.type === "creature" ? CREATURE_PLACEHOLDER : null);
+        artMap[def?.id ?? cardId] ?? fallback;
       if (artSrc) {
         const artWrap = document.createElement("div");
         artWrap.className = "hand-art";

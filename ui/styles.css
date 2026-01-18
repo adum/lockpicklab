@@ -578,6 +578,7 @@ body::after {
   cursor: pointer;
   font-family: inherit;
   min-width: 110px;
+  flex: 0 0 clamp(120px, 18vw, 170px);
   width: clamp(120px, 18vw, 170px);
   max-width: 180px;
   color: var(--ink);
