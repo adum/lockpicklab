@@ -193,6 +193,7 @@ const BOSS_ART = {
 const CREATURE_ART = {
   cultist: "./assets/creatures/cultist.jpg",
   lancer: "./assets/creatures/lancer.jpg",
+  iron_golem: "./assets/creatures/iron_golem.jpg",
 };
 
 const CREATURE_PLACEHOLDER = "./assets/creatures/placeholder.jpg";
