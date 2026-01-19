@@ -158,8 +158,12 @@
                 <input id="gen-mana-round" type="number" min="0" max="10" value="0" />
               </label>
               <label class="field">
+                <span>Boss creatures (min)</span>
+                <input id="gen-boss-min" type="number" min="0" max="6" value="0" />
+              </label>
+              <label class="field">
                 <span>Boss creatures (max)</span>
-                <input id="gen-boss" type="number" min="0" max="6" value="0" />
+                <input id="gen-boss-max" type="number" min="0" max="6" value="0" />
               </label>
               <label class="field">
                 <span>Max solutions</span>
@@ -179,6 +183,10 @@
               <div class="generator-attempts">
                 Attempts <span id="gen-attempts">0</span>
               </div>
+            </div>
+            <div class="generator-note" id="gen-note">Idle.</div>
+            <div class="generator-attempt-line" id="gen-attempt-line">
+              Latest attempt: —
             </div>
           </div>
 

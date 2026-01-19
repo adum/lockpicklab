@@ -838,6 +838,16 @@ body::after {
   text-transform: uppercase;
 }
 
+.generator-note {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.generator-attempt-line {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
 .field {
   display: grid;
   gap: 6px;

@@ -177,11 +177,14 @@ const elements = {
   genDecoys: document.getElementById("gen-decoys"),
   genRounds: document.getElementById("gen-rounds"),
   genManaRound: document.getElementById("gen-mana-round"),
-  genBoss: document.getElementById("gen-boss"),
+  genBossMin: document.getElementById("gen-boss-min"),
+  genBossMax: document.getElementById("gen-boss-max"),
   genMaxSolutions: document.getElementById("gen-max-solutions"),
   genRun: document.getElementById("gen-run"),
   genStop: document.getElementById("gen-stop"),
   genAttempts: document.getElementById("gen-attempts"),
+  genNote: document.getElementById("gen-note"),
+  genAttemptLine: document.getElementById("gen-attempt-line"),
 };
 
 const PUZZLE_LIBRARY = [
@@ -520,7 +523,10 @@ function startGenerator() {
   const decoys = parseNumber(elements.genDecoys.value, 0, 0, 6);
   const targetRounds = parseNumber(elements.genRounds.value, 1, 1, 6);
   const manaPerRound = parseNumber(elements.genManaRound.value, 0, 0, 10);
-  const bossMax = parseNumber(elements.genBoss?.value ?? 0, 0, 0, 6);
+  const bossMin = parseNumber(elements.genBossMin?.value ?? 0, 0, 0, 6);
+  const bossMax = parseNumber(elements.genBossMax?.value ?? 0, 0, 0, 6);
+  const bossMinClamped = Math.max(0, bossMin);
+  const bossMaxClamped = Math.max(bossMax, bossMinClamped);
   const maxSolutions = parseNumber(
     elements.genMaxSolutions?.value ?? 1,
     1,
@@ -559,7 +565,8 @@ function startGenerator() {
     decoys,
     targetRounds,
     manaPerRound,
-    bossMax,
+    bossMin: bossMinClamped,
+    bossMax: bossMaxClamped,
     bossName,
     playable,
     creaturePool,
@@ -570,6 +577,8 @@ function startGenerator() {
 
   updateGeneratorUI({ running: true });
   setStatus("Generating puzzle…");
+  setGeneratorNote("Generating candidates…");
+  setGeneratorAttemptLine("Latest attempt: —");
   stepGenerator(runId);
 }
 
@@ -601,7 +610,9 @@ function stepGenerator(runId = generatorState?.runId) {
       finalizeGenerator(true);
       return;
     }
-    const puzzle = buildPuzzleAttempt(generatorState);
+    setGeneratorNote("Generating candidates…");
+    const attemptNumber = generatorState.attempts + 1;
+    const puzzle = buildPuzzleAttempt(generatorState, attemptNumber);
     generatorState.attempts += 1;
     updateGeneratorUI({ running: true });
     if (!puzzle) {
@@ -620,9 +631,30 @@ function stepGenerator(runId = generatorState?.runId) {
   window.setTimeout(() => stepGenerator(runId), 0);
 }
 
-function buildPuzzleAttempt(state) {
+function buildPuzzleAttempt(state, attemptNumber) {
   const hand = pickHand(state.rng, state.playable, state.handSize);
-  const bossBoard = buildBossBoard(state.rng, state.creaturePool, state.bossMax);
+  setGeneratorAttemptLine(
+    `Attempt #${attemptNumber}: ${hand
+      .map((cardId) => cardLibrary.byId[cardId]?.name ?? cardId)
+      .join(", ")}`
+  );
+  const handTypes = new Set(
+    hand
+      .map((cardId) => cardLibrary.byId[cardId]?.type)
+      .filter((type) => Boolean(type))
+  );
+  if (handTypes.size <= 1) {
+    return null;
+  }
+  const bossBoard = buildBossBoard(
+    state.rng,
+    state.creaturePool,
+    state.bossMin,
+    state.bossMax
+  );
+  if (!bossBoard) {
+    return null;
+  }
   const startState = normalizeState({
     player: {
       mana: state.manaCap,
@@ -650,9 +682,19 @@ function buildPuzzleAttempt(state) {
       state.targetRounds,
       state.manaPerRound
     );
-    return state.decoys > 0
+    const puzzle =
+      state.decoys > 0
       ? addDecoys(base, state.rng, state.playable, state.decoys)
       : base;
+    const handTypes = new Set(
+      puzzle.player.hand
+        .map((cardId) => cardLibrary.byId[cardId]?.type)
+        .filter((type) => Boolean(type))
+    );
+    if (handTypes.size <= 1) {
+      return null;
+    }
+    return puzzle;
   } catch {
     return null;
   }
@@ -677,6 +719,8 @@ function startGeneratorSolve(puzzle) {
     seen: new Map(),
     stack: [{ state: startState, depth: 0 }],
   };
+  const attempt = generatorState.attempts;
+  setGeneratorNote(`Checking solutions for attempt #${attempt}…`);
 }
 
 function stepGeneratorSolve(runId = generatorState?.runId) {
@@ -766,11 +810,15 @@ function finalizeGenerator(cancelled, puzzle) {
   generatorCancel = false;
 
   if (cancelled) {
+    setGeneratorNote(
+      `Generator stopped after ${attempts} attempt${attempts === 1 ? "" : "s"}.`
+    );
     setStatus(`Generator stopped after ${attempts} attempt${attempts === 1 ? "" : "s"}.`, "warn");
     return;
   }
 
   if (!puzzle) {
+    setGeneratorNote("Generator failed to produce a puzzle.");
     setStatus("Generator failed to produce a puzzle.", "warn");
     return;
   }
@@ -778,6 +826,9 @@ function finalizeGenerator(cancelled, puzzle) {
   currentPuzzle = puzzle;
   elements.puzzleJson.value = JSON.stringify(currentPuzzle, null, 2);
   resetState();
+  setGeneratorNote(
+    `Generated ${puzzle.id} after ${attempts} attempt${attempts === 1 ? "" : "s"}.`
+  );
   setStatus(`Generated ${puzzle.id} after ${attempts} attempt${attempts === 1 ? "" : "s"}.`);
 }
 
@@ -790,6 +841,20 @@ function updateGeneratorUI(state) {
     elements.genRun.disabled = running;
     elements.genStop.disabled = !running;
   }
+}
+
+function setGeneratorNote(message) {
+  if (!elements.genNote) {
+    return;
+  }
+  elements.genNote.textContent = message;
+}
+
+function setGeneratorAttemptLine(message) {
+  if (!elements.genAttemptLine) {
+    return;
+  }
+  elements.genAttemptLine.textContent = message;
 }
 
 function estimateMaxDepth(state) {
@@ -825,11 +890,17 @@ function pickHand(rng, pool, count) {
   return hand;
 }
 
-function buildBossBoard(rng, pool, maxCount) {
-  if (!Array.isArray(pool) || pool.length === 0 || maxCount <= 0) {
-    return [];
+function buildBossBoard(rng, pool, minCount, maxCount) {
+  const min = Math.max(0, minCount ?? 0);
+  const max = Math.max(min, maxCount ?? 0);
+  if (!Array.isArray(pool) || pool.length === 0) {
+    return min > 0 ? null : [];
   }
-  const count = rng.int(maxCount + 1);
+  if (max <= 0) {
+    return min > 0 ? null : [];
+  }
+  const range = max - min;
+  const count = min + rng.int(range + 1);
   const board = [];
   for (let i = 0; i < count; i += 1) {
     const pick = rng.pick(pool);
