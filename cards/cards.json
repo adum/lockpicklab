@@ -21,6 +21,15 @@
       ]
     },
     {
+      "id": "testudo_rune",
+      "name": "Testudo Rune",
+      "type": "mod",
+      "cost": 1,
+      "effects": [
+        {"type": "grant_keyword", "keyword": "testudo"}
+      ]
+    },
+    {
       "id": "war_banner",
       "name": "War Banner",
       "type": "effect",

@@ -4,7 +4,8 @@ export type Keyword =
   | "storm"
   | "pierce"
   | "chain"
-  | "sacrifice";
+  | "sacrifice"
+  | "testudo";
 
 export interface DamageEffect {
   type: "damage";

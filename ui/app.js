@@ -25,6 +25,13 @@ const fallbackCards = {
       effects: [{ type: "grant_keyword", keyword: "pierce" }],
     },
     {
+      id: "testudo_rune",
+      name: "Testudo Rune",
+      type: "mod",
+      cost: 1,
+      effects: [{ type: "grant_keyword", keyword: "testudo" }],
+    },
+    {
       id: "war_banner",
       name: "War Banner",
       type: "effect",
@@ -163,6 +170,8 @@ const elements = {
   solveExpanded: document.getElementById("solve-expanded"),
   solveNote: document.getElementById("solve-note"),
   solveResults: document.getElementById("solve-results"),
+  editMode: document.getElementById("edit-mode"),
+  editCardList: document.getElementById("edit-card-list"),
   roundsLeft: document.getElementById("rounds-left"),
   manaPerRoundWrap: document.getElementById("mana-per-round-wrap"),
   manaPerRound: document.getElementById("mana-per-round"),
@@ -222,6 +231,7 @@ const EFFECT_PLACEHOLDER = "./assets/effects/placeholder.jpg";
 
 const MOD_ART = {
   piercing_rune: "./assets/mods/placeholder.jpg",
+  testudo_rune: "./assets/mods/placeholder.jpg",
 };
 
 const MOD_PLACEHOLDER = "./assets/mods/placeholder.jpg";
@@ -284,6 +294,8 @@ const KEYWORD_TOOLTIPS = {
   guard: "Guard: must be attacked before non-Guard targets.",
   storm: "Storm: can attack any target immediately.",
   pierce: "Pierce: excess power hits the boss.",
+  testudo:
+    "Testudo: if flanked by friendly creatures, this creature takes no combat damage.",
   chain: "Chain: bonus effect if a card was already played this round.",
   sacrifice: "Sacrifice: destroy this creature to give a friendly creature +4 power.",
   tired: "Tired: this creature already attacked this round.",
@@ -417,6 +429,87 @@ elements.solveRun.addEventListener("click", () => {
 
 elements.solveStop.addEventListener("click", () => {
   stopSolver();
+});
+
+elements.editMode?.addEventListener("change", () => {
+  if (elements.editMode.checked) {
+    pendingAction = null;
+  }
+  render();
+});
+
+elements.roundsLeft?.addEventListener("click", () => {
+  if (!isEditMode()) {
+    return;
+  }
+  const totalRoundsRaw = currentState.targetRounds ?? currentPuzzle.targetRounds;
+  const totalRounds =
+    typeof totalRoundsRaw === "number" ? totalRoundsRaw : Number(totalRoundsRaw);
+  const currentLeft = Number.isFinite(totalRounds)
+    ? Math.max(Number(totalRounds) - (currentState.turn - 1), 1)
+    : 1;
+  const nextLeft = promptNumber("Rounds left", currentLeft, 1, 12);
+  if (nextLeft === null) {
+    return;
+  }
+  const newTarget = Math.max(currentState.turn, nextLeft + (currentState.turn - 1));
+  currentState.targetRounds = newTarget;
+  commitEdit();
+  render();
+});
+
+elements.opponentHealth?.addEventListener("click", () => {
+  if (!isEditMode()) {
+    return;
+  }
+  const nextHealth = promptNumber(
+    "Boss health",
+    currentState.opponent?.health ?? 0,
+    0,
+    999
+  );
+  if (nextHealth === null) {
+    return;
+  }
+  currentState.opponent.health = nextHealth;
+  commitEdit();
+  render();
+});
+
+elements.playerMana?.addEventListener("click", () => {
+  if (!isEditMode()) {
+    return;
+  }
+  const nextMana = promptNumber(
+    "Player mana",
+    currentState.player?.mana ?? 0,
+    0,
+    999
+  );
+  if (nextMana === null) {
+    return;
+  }
+  currentState.player.mana = nextMana;
+  commitEdit();
+  render();
+});
+
+elements.manaPerRound?.addEventListener("click", () => {
+  if (!isEditMode()) {
+    return;
+  }
+  const nextMana = promptNumber(
+    "Mana per round",
+    currentState.manaPerRound ?? 0,
+    0,
+    99
+  );
+  if (nextMana === null) {
+    return;
+  }
+  currentState.manaPerRound = nextMana;
+  commitEdit();
+  render();
 });
 
 document.addEventListener("pointerdown", (event) => {
@@ -964,6 +1057,143 @@ function parseNumber(value, fallback, min, max) {
     return fallback;
   }
   return Math.min(max, Math.max(min, parsed));
+}
+
+function isEditMode() {
+  return Boolean(elements.editMode?.checked);
+}
+
+function promptNumber(label, currentValue, min, max) {
+  const value = window.prompt(`${label}:`, String(currentValue ?? ""));
+  if (value === null) {
+    return null;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    setStatus(`Invalid number for ${label}.`, "warn");
+    return null;
+  }
+  const clamped = Math.min(max ?? parsed, Math.max(min ?? parsed, parsed));
+  return clamped;
+}
+
+function commitEdit() {
+  syncPuzzleFromState();
+  const normalized = normalizeState(currentState);
+  currentState = normalized;
+  snapshots = [normalized];
+  initialState = normalized;
+  actions = [];
+  solutionIndex = 0;
+  pendingAction = null;
+  failureState = false;
+  stopAutoplay();
+}
+
+function syncPuzzleFromState() {
+  if (!currentPuzzle) {
+    return;
+  }
+  currentPuzzle.player = {
+    mana: currentState.player?.mana ?? 0,
+    hand: [...(currentState.player?.hand ?? [])],
+    board: (currentState.player?.board ?? []).map((unit) => {
+      const entry = {
+        card: unit.card,
+        power: unit.power ?? 0,
+        keywords: unit.keywords ? [...unit.keywords] : [],
+        tired: Boolean(unit.tired),
+      };
+      if (Array.isArray(unit.mods) && unit.mods.length > 0) {
+        entry.mods = [...unit.mods];
+      }
+      return entry;
+    }),
+  };
+  currentPuzzle.opponent = {
+    name: currentPuzzle.opponent?.name ?? currentState.opponent?.name,
+    health: currentState.opponent?.health ?? 0,
+    board: (currentState.opponent?.board ?? []).map((unit) => {
+      const entry = {
+        card: unit.card,
+        power: unit.power ?? 0,
+        keywords: unit.keywords ? [...unit.keywords] : [],
+        tired: Boolean(unit.tired),
+      };
+      if (Array.isArray(unit.mods) && unit.mods.length > 0) {
+        entry.mods = [...unit.mods];
+      }
+      return entry;
+    }),
+  };
+  currentPuzzle.manaPerRound = currentState.manaPerRound ?? 0;
+  currentPuzzle.targetRounds = currentState.targetRounds ?? currentPuzzle.targetRounds;
+  elements.puzzleJson.value = JSON.stringify(currentPuzzle, null, 2);
+}
+
+function createInstanceFromCard(cardId, prefix) {
+  const def = cardLibrary.byId?.[cardId];
+  if (!def || def.type !== "creature") {
+    return null;
+  }
+  const uid = `${prefix}${currentState.nextUid ?? 1}`;
+  currentState.nextUid = (currentState.nextUid ?? 1) + 1;
+  return {
+    uid,
+    card: cardId,
+    power: def.stats?.power ?? 0,
+    keywords: def.keywords ? [...def.keywords] : [],
+    mods: [],
+    tired: false,
+  };
+}
+
+function renderEditCardList() {
+  const container = elements.editCardList;
+  if (!container) {
+    return;
+  }
+  container.innerHTML = "";
+  const cards = Object.values(cardLibrary.byId ?? {}).slice();
+  cards.sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
+  if (cards.length === 0) {
+    container.innerHTML = '<div class="placeholder">No cards loaded.</div>';
+    return;
+  }
+  cards.forEach((card) => {
+    const item = document.createElement("div");
+    item.className = "edit-card-item";
+    item.textContent = card.name ?? card.id;
+    item.dataset.cardId = card.id;
+    item.addEventListener("click", () => {
+      if (!isEditMode()) {
+        setStatus("Enable Edit Mode to modify the puzzle.", "warn");
+        return;
+      }
+      currentState.player.hand.push(card.id);
+      commitEdit();
+      render();
+    });
+    item.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      if (!isEditMode()) {
+        setStatus("Enable Edit Mode to modify the puzzle.", "warn");
+        return;
+      }
+      if (card.type !== "creature") {
+        setStatus("Only creatures can be added to the boss board.", "warn");
+        return;
+      }
+      const instance = createInstanceFromCard(card.id, "o");
+      if (!instance) {
+        return;
+      }
+      currentState.opponent.board.push(instance);
+      commitEdit();
+      render();
+    });
+    container.appendChild(item);
+  });
 }
 
 function updateGeneratorSeedInput() {
@@ -1945,6 +2175,23 @@ function renderBoard(container, list, side, options = {}) {
       card.appendChild(keywords);
     }
 
+    if (isEditMode()) {
+      card.classList.add("edit-removable");
+      card.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (side === "player") {
+          currentState.player.board.splice(boardIndex, 1);
+        } else {
+          currentState.opponent.board.splice(boardIndex, 1);
+        }
+        pendingAction = null;
+        commitEdit();
+        render();
+      });
+      container.appendChild(card);
+      return;
+    }
+
     if (side === "player" && isCreature) {
       const sourceRef = unit.uid ?? `player:slot${boardIndex}`;
       const attackActions = cachedLegalActions.filter(
@@ -2109,7 +2356,7 @@ function renderHand(container, hand) {
     return;
   }
 
-  hand.forEach((cardId) => {
+  hand.forEach((cardId, handIndex) => {
     const chip = document.createElement("button");
     chip.className = "hand-card";
     chip.dataset.cardId = cardId;
@@ -2202,8 +2449,15 @@ function renderHand(container, hand) {
     const playActions = cachedLegalActions.filter(
       (action) => action.type === "play" && action.card === cardId
     );
-    chip.disabled = playActions.length === 0;
+    chip.disabled = isEditMode() ? false : playActions.length === 0;
     chip.addEventListener("click", () => {
+      if (isEditMode()) {
+        currentState.player.hand.splice(handIndex, 1);
+        pendingAction = null;
+        commitEdit();
+        render();
+        return;
+      }
       if (playActions.length === 0) {
         setStatus(`Cannot play ${cardId} right now.`, "warn");
         return;
@@ -2311,5 +2565,6 @@ loadCardLibrary().then(() => {
   populatePuzzleSelect();
   elements.genSeedRandom.checked = true;
   elements.genSeed.disabled = true;
+  renderEditCardList();
   render();
 });

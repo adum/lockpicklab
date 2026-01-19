@@ -853,6 +853,31 @@ body::after {
   color: var(--muted);
 }
 
+.edit-card-list {
+  max-height: 220px;
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(106, 160, 200, 0.2);
+  background: rgba(12, 12, 16, 0.6);
+  padding: 6px;
+  display: grid;
+  gap: 4px;
+}
+
+.edit-card-item {
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  color: var(--ink);
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.edit-card-item:hover {
+  background: rgba(36, 74, 98, 0.35);
+}
+
 .field {
   display: grid;
   gap: 6px;

@@ -16,9 +16,32 @@ const GUARD: Keyword = "guard";
 const PIERCE: Keyword = "pierce";
 const STORM: Keyword = "storm";
 const SACRIFICE: Keyword = "sacrifice";
+const TESTUDO: Keyword = "testudo";
 
 function hasKeyword(instance: CardInstance, keyword: Keyword): boolean {
   return instance.keywords.includes(keyword);
+}
+
+function hasTestudoCover(
+  board: CardInstance[],
+  index: number,
+  cards: CardLibrary
+): boolean {
+  const minion = board[index];
+  if (!minion || !isCreatureInstance(minion, cards) || !hasKeyword(minion, TESTUDO)) {
+    return false;
+  }
+  const creatureIndexes: number[] = [];
+  board.forEach((entry, idx) => {
+    if (isCreatureInstance(entry, cards)) {
+      creatureIndexes.push(idx);
+    }
+  });
+  const position = creatureIndexes.indexOf(index);
+  if (position <= 0 || position >= creatureIndexes.length - 1) {
+    return false;
+  }
+  return true;
 }
 
 function hasKeywordDef(def: CardDefinition | undefined, keyword: Keyword): boolean {
@@ -299,9 +322,15 @@ function applyAttack(state: GameState, action: AttackAction, cards: CardLibrary)
   if (!isCreatureInstance(defender, cards)) {
     throw new Error(`Invalid attack target: ${action.target}`);
   }
+  const attackerShielded = hasTestudoCover(state.player.board, sourceIndex, cards);
+  const defenderShielded = hasTestudoCover(state.opponent.board, targetIndex, cards);
   const defenderPowerBefore = defender.power;
-  applyDamageToMinion(defender, attackPower);
-  applyDamageToMinion(attacker, defenderPowerBefore);
+  if (!defenderShielded) {
+    applyDamageToMinion(defender, attackPower);
+  }
+  if (!attackerShielded) {
+    applyDamageToMinion(attacker, defenderPowerBefore);
+  }
 
   if (hasKeyword(attacker, PIERCE) && attackPower > defenderPowerBefore) {
     const excess = attackPower - defenderPowerBefore;
