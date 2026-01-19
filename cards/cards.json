@@ -81,6 +81,14 @@
       "cost": 2,
       "stats": {"power": 3},
       "keywords": ["guard"]
+    },
+    {
+      "id": "spider",
+      "name": "Spider",
+      "type": "creature",
+      "cost": 2,
+      "stats": {"power": 2},
+      "keywords": ["venom"]
     }
   ]
 }

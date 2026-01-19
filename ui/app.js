@@ -80,6 +80,14 @@ const fallbackCards = {
       stats: { power: 3 },
       keywords: ["guard"],
     },
+    {
+      id: "spider",
+      name: "Spider",
+      type: "creature",
+      cost: 2,
+      stats: { power: 2 },
+      keywords: ["venom"],
+    },
   ],
 };
 
@@ -139,7 +147,9 @@ const elements = {
   puzzleSelect: document.getElementById("puzzle-select"),
   puzzleDifficulty: document.getElementById("puzzle-difficulty"),
   puzzleTags: document.getElementById("puzzle-tags"),
+  playboard: document.getElementById("playboard"),
   opponentHealth: document.getElementById("opponent-health"),
+  opponentPoison: document.getElementById("opponent-poison"),
   bossName: document.getElementById("boss-name"),
   bossArt: document.getElementById("boss-art"),
   playerMana: document.getElementById("player-mana"),
@@ -170,6 +180,7 @@ const elements = {
   solveNote: document.getElementById("solve-note"),
   solveResults: document.getElementById("solve-results"),
   editMode: document.getElementById("edit-mode"),
+  editClear: document.getElementById("edit-clear"),
   editCardList: document.getElementById("edit-card-list"),
   roundsLeft: document.getElementById("rounds-left"),
   manaPerRoundWrap: document.getElementById("mana-per-round-wrap"),
@@ -295,6 +306,9 @@ const KEYWORD_TOOLTIPS = {
   pierce: "Pierce: excess power hits the boss.",
   testudo:
     "Testudo: if flanked by friendly creatures, this creature takes no combat damage.",
+  venom:
+    "Venom: when this creature attacks, it gives the target a poison token.",
+  poison: "Poison: takes damage at the end of every round.",
   chain: "Chain: bonus effect if a card was already played this round.",
   sacrifice: "Sacrifice: destroy this creature to give a friendly creature +4 power.",
   tired: "Tired: this creature already attacked this round.",
@@ -435,6 +449,25 @@ elements.editMode?.addEventListener("change", () => {
     pendingAction = null;
   }
   render();
+});
+
+elements.editClear?.addEventListener("click", () => {
+  if (elements.editMode && !elements.editMode.checked) {
+    elements.editMode.checked = true;
+  }
+  currentState.player.hand = [];
+  currentState.player.board = [];
+  currentState.player.mana = 5;
+  currentState.opponent.board = [];
+  currentState.opponent.health = 12;
+  currentState.opponent.poison = 0;
+  currentState.manaPerRound = 2;
+  currentState.targetRounds = 1;
+  currentState.turn = 1;
+  currentState.chainCount = 0;
+  commitEdit();
+  render();
+  setStatus("Puzzle cleared.");
 });
 
 elements.roundsLeft?.addEventListener("click", () => {
@@ -1107,6 +1140,9 @@ function syncPuzzleFromState() {
       if (Array.isArray(unit.mods) && unit.mods.length > 0) {
         entry.mods = [...unit.mods];
       }
+      if (unit.poison && unit.poison > 0) {
+        entry.poison = unit.poison;
+      }
       return entry;
     }),
   };
@@ -1123,9 +1159,17 @@ function syncPuzzleFromState() {
       if (Array.isArray(unit.mods) && unit.mods.length > 0) {
         entry.mods = [...unit.mods];
       }
+      if (unit.poison && unit.poison > 0) {
+        entry.poison = unit.poison;
+      }
       return entry;
     }),
   };
+  if (currentState.opponent?.poison && currentState.opponent.poison > 0) {
+    currentPuzzle.opponent.poison = currentState.opponent.poison;
+  } else {
+    delete currentPuzzle.opponent.poison;
+  }
   currentPuzzle.manaPerRound = currentState.manaPerRound ?? 0;
   currentPuzzle.targetRounds = currentState.targetRounds ?? currentPuzzle.targetRounds;
   elements.puzzleJson.value = JSON.stringify(currentPuzzle, null, 2);
@@ -1145,6 +1189,7 @@ function createInstanceFromCard(cardId, prefix) {
     keywords: def.keywords ? [...def.keywords] : [],
     mods: [],
     tired: false,
+    poison: 0,
   };
 }
 
@@ -1500,12 +1545,25 @@ function render() {
   const puzzle = currentPuzzle ?? {};
 
   syncPuzzleSelect();
+  if (elements.playboard) {
+    elements.playboard.classList.toggle("edit-mode", isEditMode());
+  }
   elements.puzzleDifficulty.textContent = puzzle.difficulty ?? "—";
   elements.puzzleTags.textContent = Array.isArray(puzzle.tags)
     ? puzzle.tags.join(", ")
     : "—";
 
   elements.opponentHealth.textContent = currentState.opponent?.health ?? 0;
+  if (elements.opponentPoison) {
+    const poison = currentState.opponent?.poison ?? 0;
+    if (poison > 0) {
+      elements.opponentPoison.textContent = `Poison ${poison}`;
+      elements.opponentPoison.classList.add("visible");
+    } else {
+      elements.opponentPoison.textContent = "";
+      elements.opponentPoison.classList.remove("visible");
+    }
+  }
   elements.playerMana.textContent = currentState.player?.mana ?? 0;
 
   const bossName = currentPuzzle.opponent?.name ?? "Boss";
@@ -2164,6 +2222,13 @@ function renderBoard(container, list, side, options = {}) {
       tag.textContent = "vanilla";
       tag.dataset.tooltip = KEYWORD_TOOLTIPS.vanilla;
       keywords.appendChild(tag);
+    }
+    if (unit.poison && unit.poison > 0) {
+      const poisonTag = document.createElement("span");
+      poisonTag.className = "tag";
+      poisonTag.textContent = `poison ${unit.poison}`;
+      poisonTag.dataset.tooltip = KEYWORD_TOOLTIPS.poison;
+      keywords.appendChild(poisonTag);
     }
 
     card.appendChild(badges);

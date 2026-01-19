@@ -174,6 +174,13 @@ body::after {
   gap: 24px;
 }
 
+.board.edit-mode {
+  border-color: rgba(98, 176, 120, 0.8);
+  box-shadow:
+    0 0 0 2px rgba(98, 176, 120, 0.45),
+    0 18px 36px rgba(0, 0, 0, 0.35);
+}
+
 .side {
   display: grid;
   gap: 16px;
@@ -313,6 +320,24 @@ body::after {
 
 .boss-stat span {
   font-weight: 700;
+}
+
+.boss-poison {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(80, 140, 92, 0.3);
+  border: 1px solid rgba(98, 176, 120, 0.6);
+  color: #c9f3d0;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  display: none;
+}
+
+.boss-poison.visible {
+  display: inline-flex;
+  align-items: center;
 }
 
 .boss-stat.boss-flash {
@@ -851,6 +876,13 @@ body::after {
 .generator-reject {
   font-size: 0.75rem;
   color: var(--muted);
+}
+
+.edit-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .edit-card-list {

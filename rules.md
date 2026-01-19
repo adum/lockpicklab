@@ -58,6 +58,12 @@ Mods attach to any creature (player or boss) and permanently modify it, such as 
 Testudo: if a creature with Testudo has friendly creatures on both sides of it on the board, it takes no combat damage (attacking or defending).
 
 
+Venom: when a creature with Venom attacks, it gives the target a poison token.
+
+
+Poison: each poison token deals 1 damage at the end of every round.
+
+
 
 At the end of the round any creature that is tired becomes rested. The player gets more mana according to the setup. (Mana carries over).
 

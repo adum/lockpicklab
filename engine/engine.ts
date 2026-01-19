@@ -17,6 +17,7 @@ const PIERCE: Keyword = "pierce";
 const STORM: Keyword = "storm";
 const SACRIFICE: Keyword = "sacrifice";
 const TESTUDO: Keyword = "testudo";
+const VENOM: Keyword = "venom";
 
 function hasKeyword(instance: CardInstance, keyword: Keyword): boolean {
   return instance.keywords.includes(keyword);
@@ -114,6 +115,14 @@ function applyDamageToOpponent(state: GameState, amount: number): void {
   state.opponent.health = Math.max(0, state.opponent.health - amount);
 }
 
+function applyPoisonToMinion(minion: CardInstance, amount: number): void {
+  minion.poison = (minion.poison ?? 0) + amount;
+}
+
+function applyPoisonToOpponent(state: GameState, amount: number): void {
+  state.opponent.poison = (state.opponent.poison ?? 0) + amount;
+}
+
 function getCardDef(cards: CardLibrary, cardId: string): CardDefinition {
   const def = cards.byId[cardId];
   if (!def) {
@@ -157,7 +166,7 @@ export function applyAction(
     case "activate":
       return applyActivate(next, action, cards);
     case "end":
-      return applyEnd(next);
+      return applyEnd(next, cards);
     default:
       throw new Error(`Unknown action type: ${(action as Action).type}`);
   }
@@ -187,6 +196,7 @@ function applyPlay(state: GameState, action: PlayAction, cards: CardLibrary): Ga
       keywords: def.keywords ? [...def.keywords] : [],
       mods: [],
       tired: false,
+      poison: 0,
     };
     state.player.board.push(instance);
   } else if (def.type === "spell") {
@@ -199,6 +209,7 @@ function applyPlay(state: GameState, action: PlayAction, cards: CardLibrary): Ga
       keywords: def.keywords ? [...def.keywords] : [],
       mods: [],
       tired: false,
+      poison: 0,
     };
     state.player.board.push(instance);
   } else if (def.type === "mod") {
@@ -306,6 +317,9 @@ function applyAttack(state: GameState, action: AttackAction, cards: CardLibrary)
       throw new Error("Enemy minions are present; cannot attack opponent");
     }
     applyDamageToOpponent(state, attackPower);
+    if (hasKeyword(attacker, VENOM)) {
+      applyPoisonToOpponent(state, 1);
+    }
     attacker.tired = true;
     return state;
   }
@@ -330,6 +344,9 @@ function applyAttack(state: GameState, action: AttackAction, cards: CardLibrary)
   }
   if (!attackerShielded) {
     applyDamageToMinion(attacker, defenderPowerBefore);
+  }
+  if (hasKeyword(attacker, VENOM)) {
+    applyPoisonToMinion(defender, 1);
   }
 
   if (hasKeyword(attacker, PIERCE) && attackPower > defenderPowerBefore) {
@@ -388,7 +405,22 @@ function applyActivate(
   return state;
 }
 
-function applyEnd(state: GameState): GameState {
+function applyEnd(state: GameState, cards: CardLibrary): GameState {
+  state.player.board.forEach((minion) => {
+    if (minion.poison && minion.poison > 0) {
+      applyDamageToMinion(minion, minion.poison);
+    }
+  });
+  state.opponent.board.forEach((minion) => {
+    if (minion.poison && minion.poison > 0) {
+      applyDamageToMinion(minion, minion.poison);
+    }
+  });
+  if (state.opponent.poison && state.opponent.poison > 0) {
+    applyDamageToOpponent(state, state.opponent.poison);
+  }
+  state.player.board = removeDead(state.player.board, cards);
+  state.opponent.board = removeDead(state.opponent.board, cards);
   state.player.board.forEach((minion) => {
     minion.tired = false;
   });

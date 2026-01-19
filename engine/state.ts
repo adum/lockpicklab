@@ -8,6 +8,7 @@ function cloneInstance(instance: CardInstance): CardInstance {
     keywords: [...instance.keywords],
     mods: [...instance.mods],
     tired: instance.tired,
+    poison: instance.poison ?? 0,
   };
 }
 
@@ -28,6 +29,7 @@ function cloneOpponent(side: OpponentState): OpponentState {
     board: side.board.map(cloneInstance),
     deck: side.deck ? [...side.deck] : undefined,
     graveyard: side.graveyard ? [...side.graveyard] : undefined,
+    poison: side.poison ?? 0,
   };
 }
 
@@ -68,6 +70,14 @@ export function normalizeState(input: {
   const nextUidRef = { value: input.nextUid ?? 1 };
   const player = cloneSide(input.player);
   const opponent = cloneOpponent(input.opponent);
+
+  player.board.forEach((unit) => {
+    unit.poison = unit.poison ?? 0;
+  });
+  opponent.board.forEach((unit) => {
+    unit.poison = unit.poison ?? 0;
+  });
+  opponent.poison = opponent.poison ?? 0;
 
   assignMissingUids(player.board, "p", nextUidRef);
   assignMissingUids(opponent.board, "o", nextUidRef);

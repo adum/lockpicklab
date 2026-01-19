@@ -5,7 +5,8 @@ export type Keyword =
   | "pierce"
   | "chain"
   | "sacrifice"
-  | "testudo";
+  | "testudo"
+  | "venom";
 
 export interface DamageEffect {
   type: "damage";
@@ -61,6 +62,7 @@ export interface CardInstance {
   keywords: Keyword[];
   mods: string[];
   tired: boolean;
+  poison?: number;
 }
 
 export interface SideState {
@@ -77,6 +79,7 @@ export interface OpponentState {
   board: CardInstance[];
   deck?: string[];
   graveyard?: string[];
+  poison?: number;
 }
 
 export interface GameState {

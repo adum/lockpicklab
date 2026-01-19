@@ -38,7 +38,7 @@
     </header>
 
     <main class="grid">
-      <section class="board">
+      <section class="board" id="playboard">
         <div class="side" id="boss-side">
           <div class="boss-victory" id="boss-victory">Victory</div>
           <div class="boss-failure" id="boss-failure">Failure</div>
@@ -65,6 +65,7 @@
                   data-tooltip="Boss health. Reduce to 0 to win."
                 >
                   Health <span id="opponent-health">0</span>
+                  <span class="boss-poison" id="opponent-poison"></span>
                 </div>
               </div>
             </div>
@@ -193,12 +194,12 @@
 
           <div class="section">
             <div class="section-title">Edit Puzzle</div>
-            <div class="field">
-              <span>Edit mode</span>
+            <div class="edit-controls">
               <label class="seed-toggle">
                 <input id="edit-mode" type="checkbox" />
-                <span>Enabled</span>
+                <span>Edit Mode</span>
               </label>
+              <button class="btn ghost" id="edit-clear">Clear</button>
             </div>
             <div class="panel-subtitle">
               Left-click adds to your hand. Right-click adds a boss creature.

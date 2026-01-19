@@ -3,6 +3,7 @@ const PIERCE = "pierce";
 const STORM = "storm";
 const SACRIFICE = "sacrifice";
 const TESTUDO = "testudo";
+const VENOM = "venom";
 
 export function buildCardLibrary(data) {
   const byId = {};
@@ -41,6 +42,7 @@ function cloneOpponent(side) {
     board: side.board.map(cloneInstance),
     deck: side.deck ? [...side.deck] : undefined,
     graveyard: side.graveyard ? [...side.graveyard] : undefined,
+    poison: side.poison ?? 0,
   };
 }
 
@@ -52,6 +54,7 @@ function cloneInstance(instance) {
     keywords: [...(instance.keywords ?? [])],
     mods: [...(instance.mods ?? [])],
     tired: Boolean(instance.tired),
+    poison: instance.poison ?? 0,
   };
 }
 
@@ -71,6 +74,13 @@ export function normalizeState(input) {
 
   assignMissingUids(player.board, "p", nextUidRef);
   assignMissingUids(opponent.board, "o", nextUidRef);
+  player.board.forEach((unit) => {
+    unit.poison = unit.poison ?? 0;
+  });
+  opponent.board.forEach((unit) => {
+    unit.poison = unit.poison ?? 0;
+  });
+  opponent.poison = opponent.poison ?? 0;
 
   return {
     player,
@@ -175,6 +185,14 @@ function applyDamageToOpponent(state, amount) {
   state.opponent.health = Math.max(0, state.opponent.health - amount);
 }
 
+function applyPoisonToMinion(minion, amount) {
+  minion.poison = (minion.poison ?? 0) + amount;
+}
+
+function applyPoisonToOpponent(state, amount) {
+  state.opponent.poison = (state.opponent.poison ?? 0) + amount;
+}
+
 function getCardDef(cards, cardId) {
   const def = cards.byId[cardId];
   if (!def) {
@@ -214,7 +232,7 @@ export function applyAction(state, action, cards) {
     case "activate":
       return applyActivate(next, action, cards);
     case "end":
-      return applyEnd(next);
+      return applyEnd(next, cards);
     default:
       throw new Error(`Unknown action type: ${action.type}`);
   }
@@ -244,6 +262,7 @@ function applyPlay(state, action, cards) {
       keywords: def.keywords ? [...def.keywords] : [],
       mods: [],
       tired: false,
+      poison: 0,
     };
     state.player.board.push(instance);
   } else if (def.type === "spell") {
@@ -256,6 +275,7 @@ function applyPlay(state, action, cards) {
       keywords: def.keywords ? [...def.keywords] : [],
       mods: [],
       tired: false,
+      poison: 0,
     };
     state.player.board.push(instance);
   } else if (def.type === "mod") {
@@ -353,6 +373,9 @@ function applyAttack(state, action, cards) {
       throw new Error("Enemy minions are present; cannot attack opponent");
     }
     applyDamageToOpponent(state, attackPower);
+    if (hasKeyword(attacker, VENOM)) {
+      applyPoisonToOpponent(state, 1);
+    }
     attacker.tired = true;
     return state;
   }
@@ -377,6 +400,9 @@ function applyAttack(state, action, cards) {
   }
   if (!attackerShielded) {
     applyDamageToMinion(attacker, defenderPowerBefore);
+  }
+  if (hasKeyword(attacker, VENOM)) {
+    applyPoisonToMinion(defender, 1);
   }
 
   if (hasKeyword(attacker, PIERCE) && attackPower > defenderPowerBefore) {
@@ -431,7 +457,22 @@ function applyActivate(state, action, cards) {
   return state;
 }
 
-function applyEnd(state) {
+function applyEnd(state, cards) {
+  state.player.board.forEach((minion) => {
+    if (minion.poison && minion.poison > 0) {
+      applyDamageToMinion(minion, minion.poison);
+    }
+  });
+  state.opponent.board.forEach((minion) => {
+    if (minion.poison && minion.poison > 0) {
+      applyDamageToMinion(minion, minion.poison);
+    }
+  });
+  if (state.opponent.poison && state.opponent.poison > 0) {
+    applyDamageToOpponent(state, state.opponent.poison);
+  }
+  state.player.board = removeDead(state.player.board, cards);
+  state.opponent.board = removeDead(state.opponent.board, cards);
   state.player.board.forEach((minion) => {
     minion.tired = false;
   });
