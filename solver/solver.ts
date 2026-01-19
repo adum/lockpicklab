@@ -31,11 +31,10 @@ export function solve(
   state: GameState,
   cards: CardLibrary,
   options?: {
-    maxDepth?: number;
     maxWins?: number;
   }
 ): SolveResult {
-  const maxDepth = options?.maxDepth ?? 8;
+  const maxDepth = estimateMaxDepth(state);
   const maxWinsRaw = options?.maxWins ?? 0;
   const maxWins =
     maxWinsRaw === 0 ? Number.POSITIVE_INFINITY : maxWinsRaw;
@@ -89,4 +88,20 @@ export function solve(
   dfs(state, 0, []);
 
   return { wins, visited, expanded };
+}
+
+function estimateMaxDepth(state: GameState): number {
+  const roundsRaw = state.targetRounds;
+  const rounds =
+    typeof roundsRaw === "number" && Number.isFinite(roundsRaw)
+      ? roundsRaw
+      : Number(roundsRaw) || 1;
+  const handSize = state.player?.hand?.length ?? 0;
+  const baseBoardCount = state.player?.board?.length ?? 0;
+  const maxCreatures = baseBoardCount + handSize;
+  const plays = handSize;
+  const attacks = maxCreatures * rounds;
+  const activates = maxCreatures;
+  const ends = Math.max(0, rounds - 1);
+  return Math.max(1, plays + attacks + activates + ends);
 }

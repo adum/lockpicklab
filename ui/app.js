@@ -161,7 +161,6 @@ const elements = {
   undoAction: document.getElementById("undo-action"),
   stepSolution: document.getElementById("step-solution"),
   playSolution: document.getElementById("play-solution"),
-  solveDepth: document.getElementById("solve-depth"),
   solveWinsMax: document.getElementById("solve-wins-max"),
   solveRun: document.getElementById("solve-run"),
   solveStop: document.getElementById("solve-stop"),
@@ -1094,6 +1093,7 @@ function syncPuzzleFromState() {
   if (!currentPuzzle) {
     return;
   }
+  currentPuzzle.solution = [];
   currentPuzzle.player = {
     mana: currentState.player?.mana ?? 0,
     hand: [...(currentState.player?.hand ?? [])],
@@ -1649,9 +1649,9 @@ function startSolver() {
   if (solverState) {
     stopSolver();
   }
-  const maxDepth = parseNumber(elements.solveDepth?.value ?? 8, 8, 1, 20);
   const maxWinsRaw = parseNumber(elements.solveWinsMax?.value ?? 0, 0, 0, 50);
   const maxWins = maxWinsRaw === 0 ? Number.POSITIVE_INFINITY : maxWinsRaw;
+  const maxDepth = estimateMaxDepth(currentState);
 
   solverCancel = false;
   pendingAction = null;
