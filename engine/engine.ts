@@ -261,6 +261,29 @@ function getPlayerAttackAuraBonus(state: GameState, cards: CardLibrary): number 
   return bonus;
 }
 
+function applyEndBuffs(state: GameState, cards: CardLibrary): void {
+  let bonus = 0;
+  state.player.board.forEach((instance) => {
+    const def = cards.byId[instance.card];
+    if (!def || def.type !== "effect") {
+      return;
+    }
+    def.effects?.forEach((effect) => {
+      if (effect.type === "end_buff" && effect.stat === "power" && effect.applies_to === "untired") {
+        bonus += effect.amount;
+      }
+    });
+  });
+  if (bonus <= 0) {
+    return;
+  }
+  state.player.board.forEach((minion) => {
+    if (isCreatureInstance(minion, cards) && !minion.tired) {
+      minion.power += bonus;
+    }
+  });
+}
+
 export function isWin(state: GameState): boolean {
   return state.opponent.health <= 0;
 }
@@ -556,6 +579,7 @@ function applyEnd(state: GameState, cards: CardLibrary): GameState {
     applyDamageToOpponent(state, state.opponent.poison);
   }
   handleDeaths(state, cards);
+  applyEndBuffs(state, cards);
   state.player.board.forEach((minion) => {
     minion.tired = false;
   });

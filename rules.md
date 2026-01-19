@@ -50,6 +50,8 @@ Spells do instant things like damage the boss or make a creature not tired. Some
 
 Effects stay on the battlefield indefinitely. For example, a War Banner effect gives all player creatures +1 power while attacking.
 
+Vigil Banner: at the end of each round, your untired creatures gain +1 power.
+
 
 
 Mods attach to any creature (player or boss) and permanently modify it, such as granting Pierce or a damage shield.

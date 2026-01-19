@@ -49,6 +49,15 @@
       ]
     },
     {
+      "id": "vigil_banner",
+      "name": "Vigil Banner",
+      "type": "effect",
+      "cost": 2,
+      "effects": [
+        {"type": "end_buff", "stat": "power", "amount": 1, "applies_to": "untired"}
+      ]
+    },
+    {
       "id": "cultist",
       "name": "Cultist",
       "type": "creature",

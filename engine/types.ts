@@ -30,6 +30,13 @@ export interface AuraEffect {
   applies_to: "attack";
 }
 
+export interface EndBuffEffect {
+  type: "end_buff";
+  stat: "power";
+  amount: number;
+  applies_to: "untired";
+}
+
 export interface GrantKeywordEffect {
   type: "grant_keyword";
   keyword: Keyword;
@@ -44,6 +51,7 @@ export type EffectDefinition =
   | DamageEffect
   | BuffEffect
   | AuraEffect
+  | EndBuffEffect
   | GrantKeywordEffect
   | ShieldEffect;
 

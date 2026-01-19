@@ -49,6 +49,13 @@ const fallbackCards = {
       effects: [{ type: "aura", stat: "power", amount: 1, applies_to: "attack" }],
     },
     {
+      id: "vigil_banner",
+      name: "Vigil Banner",
+      type: "effect",
+      cost: 2,
+      effects: [{ type: "end_buff", stat: "power", amount: 1, applies_to: "untired" }],
+    },
+    {
       id: "cultist",
       name: "Cultist",
       type: "creature",
@@ -137,10 +144,10 @@ const defaultPuzzle = {
     hand: [
       "cultist",
       "lancer",
-      "fireball",
       "wooden_shield",
       "gravewatcher",
       "broodmother",
+      "vigil_banner",
     ],
     board: [],
   },
@@ -276,6 +283,7 @@ const CREATURE_PLACEHOLDER = "./assets/creatures/placeholder.jpg";
 
 const EFFECT_ART = {
   war_banner: "./assets/effects/placeholder.jpg",
+  vigil_banner: "./assets/effects/placeholder.jpg",
 };
 
 const EFFECT_PLACEHOLDER = "./assets/effects/placeholder.jpg";
@@ -2670,6 +2678,14 @@ function formatCardDescription(def) {
         parts.push(`Your creatures get +${effect.amount} power on attack`);
       } else {
         parts.push(`Aura: +${effect.amount} ${effect.stat}`);
+      }
+      return;
+    }
+    if (effect.type === "end_buff") {
+      if (effect.stat === "power" && effect.applies_to === "untired") {
+        parts.push(`End of round: untired creatures gain +${effect.amount} power`);
+      } else {
+        parts.push(`End of round: +${effect.amount} ${effect.stat}`);
       }
       return;
     }

@@ -22,6 +22,7 @@ const CREATURE_PLACEHOLDER = "./assets/creatures/placeholder.jpg";
 
 const EFFECT_ART = {
   war_banner: "./assets/effects/placeholder.jpg",
+  vigil_banner: "./assets/effects/placeholder.jpg",
 };
 
 const EFFECT_PLACEHOLDER = "./assets/effects/placeholder.jpg";
@@ -63,6 +64,12 @@ function formatEffects(card) {
           return `Your creatures get +${effect.amount} power on attack`;
         }
         return `Aura: +${effect.amount} ${effect.stat}`;
+      }
+      if (effect.type === "end_buff") {
+        if (effect.stat === "power" && effect.applies_to === "untired") {
+          return `End of round: untired creatures gain +${effect.amount} power`;
+        }
+        return `End of round: +${effect.amount} ${effect.stat}`;
       }
       if (effect.type === "grant_keyword") {
         return `Grant ${formatKeyword(effect.keyword)}`;
