@@ -352,7 +352,7 @@ function applyAttack(state, action, cards) {
   }
   const defenderPowerBefore = defender.power;
   applyDamageToMinion(defender, attackPower);
-  applyDamageToMinion(attacker, defender.power);
+  applyDamageToMinion(attacker, defenderPowerBefore);
 
   if (hasKeyword(attacker, PIERCE) && attackPower > defenderPowerBefore) {
     const excess = attackPower - defenderPowerBefore;
