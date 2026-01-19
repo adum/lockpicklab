@@ -64,6 +64,9 @@ Venom: when a creature with Venom attacks, it gives the target a poison token.
 Poison: each poison token deals 1 damage at the end of every round.
 
 
+Brood: when a creature with Brood is damaged but survives, it spawns a Broodling (1 power) next to it.
+
+
 
 At the end of the round any creature that is tired becomes rested. The player gets more mana according to the setup. (Mana carries over).
 

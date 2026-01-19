@@ -18,6 +18,8 @@ const STORM: Keyword = "storm";
 const SACRIFICE: Keyword = "sacrifice";
 const TESTUDO: Keyword = "testudo";
 const VENOM: Keyword = "venom";
+const BROOD: Keyword = "brood";
+const BROODLING_ID = "broodling";
 
 function hasKeyword(instance: CardInstance, keyword: Keyword): boolean {
   return instance.keywords.includes(keyword);
@@ -113,6 +115,67 @@ function applyDamageToMinion(minion: CardInstance, amount: number): void {
 
 function applyDamageToOpponent(state: GameState, amount: number): void {
   state.opponent.health = Math.max(0, state.opponent.health - amount);
+}
+
+function applyDamageToMinionWithSpawn(
+  state: GameState,
+  board: CardInstance[],
+  index: number,
+  amount: number,
+  prefix: "p" | "o",
+  cards: CardLibrary
+): void {
+  const minion = board[index];
+  if (!minion || !isCreatureInstance(minion, cards)) {
+    return;
+  }
+  const prePower = minion.power;
+  applyDamageToMinion(minion, amount);
+  if (
+    amount > 0 &&
+    prePower > minion.power &&
+    minion.power > 0 &&
+    hasKeyword(minion, BROOD)
+  ) {
+    spawnBroodling(state, board, index, prefix, cards);
+  }
+}
+
+function spawnBroodling(
+  state: GameState,
+  board: CardInstance[],
+  index: number,
+  prefix: "p" | "o",
+  cards: CardLibrary
+): void {
+  const def = cards.byId[BROODLING_ID];
+  if (!def || def.type !== "creature") {
+    return;
+  }
+  const insertIndex = findNextCreatureIndex(board, index, cards);
+  const instance: CardInstance = {
+    uid: allocateUid(state, prefix),
+    card: def.id,
+    power: def.stats?.power ?? 1,
+    keywords: def.keywords ? [...def.keywords] : [],
+    mods: [],
+    tired: false,
+    poison: 0,
+  };
+  board.splice(insertIndex, 0, instance);
+}
+
+function findNextCreatureIndex(
+  board: CardInstance[],
+  index: number,
+  cards: CardLibrary
+): number {
+  for (let i = index + 1; i < board.length; i += 1) {
+    if (isCreatureInstance(board[i], cards)) {
+      return i;
+    }
+  }
+  return board.length;
 }
 
 function applyPoisonToMinion(minion: CardInstance, amount: number): void {
@@ -283,7 +346,7 @@ function applySpellDamage(
     if (!isCreatureInstance(defender, cards)) {
       throw new Error(`Invalid spell target: ${target}`);
     }
-    applyDamageToMinion(defender, amount);
+    applyDamageToMinionWithSpawn(state, state.opponent.board, index, amount, "o", cards);
     state.opponent.board = removeDead(state.opponent.board, cards);
     return;
   }
@@ -340,10 +403,24 @@ function applyAttack(state: GameState, action: AttackAction, cards: CardLibrary)
   const defenderShielded = hasTestudoCover(state.opponent.board, targetIndex, cards);
   const defenderPowerBefore = defender.power;
   if (!defenderShielded) {
-    applyDamageToMinion(defender, attackPower);
+    applyDamageToMinionWithSpawn(
+      state,
+      state.opponent.board,
+      targetIndex,
+      attackPower,
+      "o",
+      cards
+    );
   }
   if (!attackerShielded) {
-    applyDamageToMinion(attacker, defenderPowerBefore);
+    applyDamageToMinionWithSpawn(
+      state,
+      state.player.board,
+      sourceIndex,
+      defenderPowerBefore,
+      "p",
+      cards
+    );
   }
   if (hasKeyword(attacker, VENOM)) {
     applyPoisonToMinion(defender, 1);
@@ -406,16 +483,8 @@ function applyActivate(
 }
 
 function applyEnd(state: GameState, cards: CardLibrary): GameState {
-  state.player.board.forEach((minion) => {
-    if (minion.poison && minion.poison > 0) {
-      applyDamageToMinion(minion, minion.poison);
-    }
-  });
-  state.opponent.board.forEach((minion) => {
-    if (minion.poison && minion.poison > 0) {
-      applyDamageToMinion(minion, minion.poison);
-    }
-  });
+  applyPoisonDamageToBoard(state, state.player.board, "p", cards);
+  applyPoisonDamageToBoard(state, state.opponent.board, "o", cards);
   if (state.opponent.poison && state.opponent.poison > 0) {
     applyDamageToOpponent(state, state.opponent.poison);
   }
@@ -428,6 +497,29 @@ function applyEnd(state: GameState, cards: CardLibrary): GameState {
   state.turn += 1;
   state.player.mana += state.manaPerRound;
   return state;
+}
+
+function applyPoisonDamageToBoard(
+  state: GameState,
+  board: CardInstance[],
+  prefix: "p" | "o",
+  cards: CardLibrary
+): void {
+  let index = 0;
+  while (index < board.length) {
+    const minion = board[index];
+    if (minion && minion.poison && minion.poison > 0) {
+      applyDamageToMinionWithSpawn(
+        state,
+        board,
+        index,
+        minion.poison,
+        prefix,
+        cards
+      );
+    }
+    index += 1;
+  }
 }
 
 export function getLegalActions(state: GameState, cards: CardLibrary): Action[] {

@@ -88,6 +88,22 @@ const fallbackCards = {
       stats: { power: 2 },
       keywords: ["venom"],
     },
+    {
+      id: "broodmother",
+      name: "Broodmother",
+      type: "creature",
+      cost: 3,
+      stats: { power: 3 },
+      keywords: ["brood"],
+    },
+    {
+      id: "broodling",
+      name: "Broodling",
+      type: "creature",
+      cost: 0,
+      stats: { power: 1 },
+      keywords: [],
+    },
   ],
 };
 
@@ -100,7 +116,14 @@ const defaultPuzzle = {
   manaPerRound: 2,
   player: {
     mana: 5,
-    hand: ["cultist", "piercing_rune", "war_banner", "lancer", "fireball", "spark"],
+    hand: [
+      "cultist",
+      "lancer",
+      "fireball",
+      "testudo_rune",
+      "spider",
+      "broodmother",
+    ],
     board: [],
   },
   opponent: {
@@ -309,10 +332,11 @@ const KEYWORD_TOOLTIPS = {
   venom:
     "Venom: when this creature attacks, it gives the target a poison token.",
   poison: "Poison: takes damage at the end of every round.",
+  brood:
+    "Brood: when this creature is damaged but survives, it spawns a Broodling next to it.",
   chain: "Chain: bonus effect if a card was already played this round.",
   sacrifice: "Sacrifice: destroy this creature to give a friendly creature +4 power.",
   tired: "Tired: this creature already attacked this round.",
-  vanilla: "No special abilities.",
 };
 
 async function loadCardLibrary() {
@@ -545,7 +569,7 @@ elements.manaPerRound?.addEventListener("click", () => {
 });
 
 document.addEventListener("pointerdown", (event) => {
-  if (!pendingAction || pendingAction.type !== "play") {
+  if (!pendingAction) {
     return;
   }
   const target = event.target;
@@ -555,9 +579,17 @@ document.addEventListener("pointerdown", (event) => {
   if (target?.closest?.(".targetable")) {
     return;
   }
-  const handCard = target?.closest?.(".hand-card");
-  if (handCard && handCard.dataset.cardId === pendingAction.card) {
+  if (target?.closest?.(".target-button")) {
     return;
+  }
+  if (target?.closest?.(".attack-button")) {
+    return;
+  }
+  if (pendingAction.type === "play") {
+    const handCard = target?.closest?.(".hand-card");
+    if (handCard && handCard.dataset.cardId === pendingAction.card) {
+      return;
+    }
   }
   pendingAction = null;
   render();
@@ -1620,10 +1652,10 @@ function render() {
   const opponentSplit = splitBoardByType(currentState.opponent?.board ?? []);
   const playerSplit = splitBoardByType(currentState.player?.board ?? []);
 
-  const pendingPlayTargets = getPendingPlayTargets();
+  const pendingTargets = getPendingTargets();
 
   renderBoard(elements.opponentBoard, opponentSplit.creatures, "opponent", {
-    pendingTargets: pendingPlayTargets,
+    pendingTargets,
   });
   renderBoard(elements.opponentEffects, opponentSplit.effects, "opponent", {
     emptyText: "No effects in play.",
@@ -1636,7 +1668,7 @@ function render() {
   }
 
   renderBoard(elements.playerBoard, playerSplit.creatures, "player", {
-    pendingTargets: pendingPlayTargets,
+    pendingTargets,
   });
   renderBoard(elements.playerEffects, playerSplit.effects, "player", {
     emptyText: "No effects in play.",
@@ -1668,7 +1700,7 @@ function render() {
     );
   }
 
-  updateBossTarget(pendingPlayTargets);
+  updateBossTarget(pendingTargets);
 }
 
 function isFinalRound(state) {
@@ -1930,13 +1962,23 @@ function renderSolverResults() {
   });
 }
 
-function getPendingPlayTargets() {
-  if (!pendingAction || pendingAction.type !== "play") {
+function getPendingTargets() {
+  if (!pendingAction) {
     return null;
   }
-  const actions = cachedLegalActions.filter(
-    (action) => action.type === "play" && action.card === pendingAction.card
-  );
+  let actions = [];
+  if (pendingAction.type === "play") {
+    actions = cachedLegalActions.filter(
+      (action) => action.type === "play" && action.card === pendingAction.card
+    );
+  } else if (pendingAction.type === "attack") {
+    actions = cachedLegalActions.filter(
+      (action) =>
+        action.type === "attack" && action.source === pendingAction.source
+    );
+  } else {
+    return null;
+  }
   const targetActions = actions.filter((action) => action.target);
   if (targetActions.length === 0) {
     return null;
@@ -1958,6 +2000,7 @@ function updateBossTarget(pendingTargets) {
   const hasTarget = Boolean(pendingTargets?.has("opponent"));
   bossWrap.classList.toggle("targetable", hasTarget);
   const existing = bossWrap.querySelector(".target-icon");
+  const action = hasTarget ? pendingTargets.get("opponent") : null;
   if (!hasTarget) {
     if (existing) {
       existing.remove();
@@ -1966,6 +2009,7 @@ function updateBossTarget(pendingTargets) {
     return;
   }
   if (existing) {
+    existing.title = action?.type === "attack" ? "Attack boss" : "Cast on boss";
     bossWrap.onclick = () => {
       const action = pendingTargets.get("opponent");
       if (action) {
@@ -1974,11 +2018,10 @@ function updateBossTarget(pendingTargets) {
     };
     return;
   }
-  const action = pendingTargets.get("opponent");
   const button = document.createElement("button");
   button.type = "button";
   button.className = "target-icon";
-  button.title = "Cast on boss";
+  button.title = action?.type === "attack" ? "Attack boss" : "Cast on boss";
   button.innerHTML =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a1 1 0 0 1 1 1v2.1a6 6 0 0 1 5.9 5.9H21a1 1 0 1 1 0 2h-2.1a6 6 0 0 1-5.9 5.9V20a1 1 0 1 1-2 0v-2.1a6 6 0 0 1-5.9-5.9H3a1 1 0 1 1 0-2h2.1a6 6 0 0 1 5.9-5.9V4a1 1 0 0 1 1-1zm0 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" fill="currentColor"/></svg>';
   button.addEventListener("click", (event) => {
@@ -2216,12 +2259,6 @@ function renderBoard(container, list, side, options = {}) {
         }
         keywords.appendChild(tag);
       });
-    } else if (isCreature) {
-      const tag = document.createElement("span");
-      tag.className = "tag";
-      tag.textContent = "vanilla";
-      tag.dataset.tooltip = KEYWORD_TOOLTIPS.vanilla;
-      keywords.appendChild(tag);
     }
     if (unit.poison && unit.poison > 0) {
       const poisonTag = document.createElement("span");
@@ -2282,7 +2319,10 @@ function renderBoard(container, list, side, options = {}) {
             setStatus("No legal attacks for that creature.", "warn");
             return;
           }
-          if (attackActions.length === 1) {
+          const enemyCreatureCount = currentState.opponent.board.filter(
+            (enemy) => cardLibrary.byId?.[enemy.card]?.type === "creature"
+          ).length;
+          if (attackActions.length === 1 && enemyCreatureCount <= 1) {
             applyAndRender(attackActions[0]);
             return;
           }
@@ -2336,27 +2376,6 @@ function renderBoard(container, list, side, options = {}) {
         if (
           pendingAction &&
           pendingAction.source === sourceRef &&
-          pendingAction.type === "attack" &&
-          attackActions.length > 1
-        ) {
-          const targetsRow = document.createElement("div");
-          targetsRow.className = "attack-targets";
-          attackActions.forEach((action) => {
-            const targetBtn = document.createElement("button");
-            targetBtn.className = "target-button";
-            targetBtn.textContent = describeRef(action.target, currentState);
-            targetBtn.addEventListener("click", (event) => {
-              event.stopPropagation();
-              applyAndRender(action);
-            });
-            targetsRow.appendChild(targetBtn);
-          });
-          card.appendChild(targetsRow);
-        }
-
-        if (
-          pendingAction &&
-          pendingAction.source === sourceRef &&
           pendingAction.type === "activate" &&
           activateActions.length > 1
         ) {
@@ -2382,7 +2401,7 @@ function renderBoard(container, list, side, options = {}) {
       const targetButton = document.createElement("button");
       targetButton.type = "button";
       targetButton.className = "target-icon";
-      targetButton.title = "Cast here";
+      targetButton.title = targetAction.type === "attack" ? "Attack here" : "Cast here";
       targetButton.innerHTML =
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a1 1 0 0 1 1 1v2.1a6 6 0 0 1 5.9 5.9H21a1 1 0 1 1 0 2h-2.1a6 6 0 0 1-5.9 5.9V20a1 1 0 1 1-2 0v-2.1a6 6 0 0 1-5.9-5.9H3a1 1 0 1 1 0-2h2.1a6 6 0 0 1 5.9-5.9V4a1 1 0 0 1 1-1zm0 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" fill="currentColor"/></svg>';
       targetButton.addEventListener("click", (event) => {
@@ -2586,6 +2605,13 @@ function triggerBossFlash() {
   badge.classList.remove("boss-flash");
   void badge.offsetWidth;
   badge.classList.add("boss-flash");
+
+  const bossArtWrap = elements.bossArt?.closest(".boss-art");
+  if (bossArtWrap) {
+    bossArtWrap.classList.remove("boss-flash");
+    void bossArtWrap.offsetWidth;
+    bossArtWrap.classList.add("boss-flash");
+  }
 }
 
 function formatCardDescription(def) {

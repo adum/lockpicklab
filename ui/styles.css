@@ -287,6 +287,10 @@ body::after {
   padding: 8px;
 }
 
+.boss-art.boss-flash img {
+  animation: bossArtPulse 0.5s ease;
+}
+
 .side-title {
   font-family: var(--display-font);
   font-size: 1.2rem;
@@ -1214,6 +1218,23 @@ body::after {
     box-shadow: 0 0 0 rgba(214, 69, 69, 0);
     transform: scale(1);
     background: #9f2f2f;
+  }
+}
+
+@keyframes bossArtPulse {
+  0% {
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
+    border-color: #b98a36;
+  }
+  30% {
+    box-shadow: 0 0 28px rgba(214, 69, 69, 0.8);
+    border-color: #e35656;
+    filter: brightness(1.1) saturate(1.2);
+  }
+  100% {
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
+    border-color: #b98a36;
+    filter: none;
   }
 }
 

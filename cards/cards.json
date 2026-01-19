@@ -89,6 +89,21 @@
       "cost": 2,
       "stats": {"power": 2},
       "keywords": ["venom"]
+    },
+    {
+      "id": "broodmother",
+      "name": "Broodmother",
+      "type": "creature",
+      "cost": 3,
+      "stats": {"power": 3},
+      "keywords": ["brood"]
+    },
+    {
+      "id": "broodling",
+      "name": "Broodling",
+      "type": "creature",
+      "cost": 0,
+      "stats": {"power": 1}
     }
   ]
 }
