@@ -27,6 +27,8 @@ const EFFECT_PLACEHOLDER = "./assets/effects/placeholder.jpg";
 
 const MOD_ART = {
   piercing_rune: "./assets/mods/placeholder.jpg",
+  testudo_rune: "./assets/mods/placeholder.jpg",
+  wooden_shield: "./assets/mods/placeholder.jpg",
 };
 
 const MOD_PLACEHOLDER = "./assets/mods/placeholder.jpg";
@@ -47,7 +49,13 @@ function formatEffects(card) {
         return `Deal ${effect.amount} damage${chain}`;
       }
       if (effect.type === "buff") {
+        if (effect.amount < 0) {
+          return `Lose ${Math.abs(effect.amount)} power`;
+        }
         return `Give +${effect.amount} power`;
+      }
+      if (effect.type === "shield") {
+        return `Shield ${effect.amount} (blocks next damage)`;
       }
       if (effect.type === "aura") {
         if (effect.stat === "power" && effect.applies_to === "attack") {

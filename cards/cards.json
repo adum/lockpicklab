@@ -30,6 +30,16 @@
       ]
     },
     {
+      "id": "wooden_shield",
+      "name": "Wooden Shield",
+      "type": "mod",
+      "cost": 1,
+      "effects": [
+        {"type": "buff", "stat": "power", "amount": -1},
+        {"type": "shield", "amount": 1}
+      ]
+    },
+    {
       "id": "war_banner",
       "name": "War Banner",
       "type": "effect",

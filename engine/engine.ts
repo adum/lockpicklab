@@ -20,6 +20,7 @@ const TESTUDO: Keyword = "testudo";
 const VENOM: Keyword = "venom";
 const BROOD: Keyword = "brood";
 const BROODLING_ID = "broodling";
+const WOODEN_SHIELD_ID = "wooden_shield";
 
 function hasKeyword(instance: CardInstance, keyword: Keyword): boolean {
   return instance.keywords.includes(keyword);
@@ -129,6 +130,19 @@ function applyDamageToMinionWithSpawn(
   if (!minion || !isCreatureInstance(minion, cards)) {
     return;
   }
+  if (amount <= 0) {
+    return;
+  }
+  if (minion.shield && minion.shield > 0) {
+    minion.shield = Math.max(0, minion.shield - 1);
+    if (Array.isArray(minion.mods)) {
+      const shieldIndex = minion.mods.indexOf(WOODEN_SHIELD_ID);
+      if (shieldIndex >= 0) {
+        minion.mods.splice(shieldIndex, 1);
+      }
+    }
+    return;
+  }
   const prePower = minion.power;
   applyDamageToMinion(minion, amount);
   if (
@@ -161,6 +175,7 @@ function spawnBroodling(
     mods: [],
     tired: false,
     poison: 0,
+    shield: 0,
   };
   board.splice(insertIndex, 0, instance);
 }
@@ -260,6 +275,7 @@ function applyPlay(state: GameState, action: PlayAction, cards: CardLibrary): Ga
       mods: [],
       tired: false,
       poison: 0,
+      shield: 0,
     };
     state.player.board.push(instance);
   } else if (def.type === "spell") {
@@ -273,6 +289,7 @@ function applyPlay(state: GameState, action: PlayAction, cards: CardLibrary): Ga
       mods: [],
       tired: false,
       poison: 0,
+      shield: 0,
     };
     state.player.board.push(instance);
   } else if (def.type === "mod") {
@@ -291,7 +308,17 @@ function applyPlay(state: GameState, action: PlayAction, cards: CardLibrary): Ga
     if (!isCreatureInstance(target, cards)) {
       throw new Error(`Invalid mod target: ${action.target}`);
     }
+    const requiresPositivePower =
+      def.effects?.some((effect) => effect.type === "shield") ?? false;
+    if (requiresPositivePower && target.power <= 0) {
+      throw new Error("Cannot apply Wooden Shield to a 0-power creature");
+    }
     applyModEffects(target, def);
+    if (playerIndex >= 0) {
+      state.player.board = removeDead(state.player.board, cards);
+    } else {
+      state.opponent.board = removeDead(state.opponent.board, cards);
+    }
   }
 
   state.chainCount += 1;
@@ -301,6 +328,14 @@ function applyPlay(state: GameState, action: PlayAction, cards: CardLibrary): Ga
 function applyModEffects(target: CardInstance, def: CardDefinition): void {
   const effects = def.effects ?? [];
   effects.forEach((effect) => {
+    if (effect.type === "buff") {
+      if (effect.stat === "power") {
+        target.power += effect.amount;
+      }
+    }
+    if (effect.type === "shield") {
+      target.shield = (target.shield ?? 0) + (effect.amount ?? 1);
+    }
     if (effect.type === "grant_keyword") {
       if (!target.keywords.includes(effect.keyword)) {
         target.keywords.push(effect.keyword);
@@ -552,13 +587,31 @@ export function getLegalActions(state: GameState, cards: CardLibrary): Action[] 
     }
 
     if (def.type === "mod") {
+      const requiresPositivePower =
+        def.effects?.some((effect) => effect.type === "shield") ?? false;
       const playerTargets = state.player.board
         .map((minion, idx) => ({ minion, idx }))
-        .filter((entry) => isCreatureInstance(entry.minion, cards))
+        .filter((entry) => {
+          if (!isCreatureInstance(entry.minion, cards)) {
+            return false;
+          }
+          if (requiresPositivePower && entry.minion.power <= 0) {
+            return false;
+          }
+          return true;
+        })
         .map((entry) => `player:slot${entry.idx}`);
       const opponentTargets = state.opponent.board
         .map((minion, idx) => ({ minion, idx }))
-        .filter((entry) => isCreatureInstance(entry.minion, cards))
+        .filter((entry) => {
+          if (!isCreatureInstance(entry.minion, cards)) {
+            return false;
+          }
+          if (requiresPositivePower && entry.minion.power <= 0) {
+            return false;
+          }
+          return true;
+        })
         .map((entry) => `opponent:slot${entry.idx}`);
       if (playerTargets.length === 0 && opponentTargets.length === 0) {
         continue;

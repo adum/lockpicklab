@@ -54,6 +54,8 @@ Effects stay on the battlefield indefinitely. For example, a War Banner effect g
 
 Mods attach to any creature (player or boss) and permanently modify it, such as granting Pierce or a damage shield.
 
+Wooden Shield: reduces the creature's power by 1, then blocks the next damage it would take and breaks.
+
 
 Testudo: if a creature with Testudo has friendly creatures on both sides of it on the board, it takes no combat damage (attacking or defending).
 

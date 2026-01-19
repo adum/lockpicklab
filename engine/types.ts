@@ -34,11 +34,17 @@ export interface GrantKeywordEffect {
   keyword: Keyword;
 }
 
+export interface ShieldEffect {
+  type: "shield";
+  amount: number;
+}
+
 export type EffectDefinition =
   | DamageEffect
   | BuffEffect
   | AuraEffect
-  | GrantKeywordEffect;
+  | GrantKeywordEffect
+  | ShieldEffect;
 
 export interface CardDefinition {
   id: string;
@@ -64,6 +70,7 @@ export interface CardInstance {
   mods: string[];
   tired: boolean;
   poison?: number;
+  shield?: number;
 }
 
 export interface SideState {

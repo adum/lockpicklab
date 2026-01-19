@@ -32,6 +32,16 @@ const fallbackCards = {
       effects: [{ type: "grant_keyword", keyword: "testudo" }],
     },
     {
+      id: "wooden_shield",
+      name: "Wooden Shield",
+      type: "mod",
+      cost: 1,
+      effects: [
+        { type: "buff", stat: "power", amount: -1 },
+        { type: "shield", amount: 1 },
+      ],
+    },
+    {
       id: "war_banner",
       name: "War Banner",
       type: "effect",
@@ -120,7 +130,7 @@ const defaultPuzzle = {
       "cultist",
       "lancer",
       "fireball",
-      "testudo_rune",
+      "wooden_shield",
       "spider",
       "broodmother",
     ],
@@ -265,6 +275,7 @@ const EFFECT_PLACEHOLDER = "./assets/effects/placeholder.jpg";
 const MOD_ART = {
   piercing_rune: "./assets/mods/placeholder.jpg",
   testudo_rune: "./assets/mods/placeholder.jpg",
+  wooden_shield: "./assets/mods/placeholder.jpg",
 };
 
 const MOD_PLACEHOLDER = "./assets/mods/placeholder.jpg";
@@ -1175,6 +1186,9 @@ function syncPuzzleFromState() {
       if (unit.poison && unit.poison > 0) {
         entry.poison = unit.poison;
       }
+      if (unit.shield && unit.shield > 0) {
+        entry.shield = unit.shield;
+      }
       return entry;
     }),
   };
@@ -1193,6 +1207,9 @@ function syncPuzzleFromState() {
       }
       if (unit.poison && unit.poison > 0) {
         entry.poison = unit.poison;
+      }
+      if (unit.shield && unit.shield > 0) {
+        entry.shield = unit.shield;
       }
       return entry;
     }),
@@ -1222,6 +1239,7 @@ function createInstanceFromCard(cardId, prefix) {
     mods: [],
     tired: false,
     poison: 0,
+    shield: 0,
   };
 }
 
@@ -2626,7 +2644,15 @@ function formatCardDescription(def) {
       return;
     }
     if (effect.type === "buff") {
-      parts.push(`Give +${effect.amount} power`);
+      if (effect.amount < 0) {
+        parts.push(`Lose ${Math.abs(effect.amount)} power`);
+      } else {
+        parts.push(`Give +${effect.amount} power`);
+      }
+      return;
+    }
+    if (effect.type === "shield") {
+      parts.push(`Shield ${effect.amount} (blocks next damage)`);
       return;
     }
     if (effect.type === "aura") {
