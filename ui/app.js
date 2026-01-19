@@ -538,7 +538,6 @@ function startGenerator() {
     elements.genSeed.value = String(seed);
   }
   saveGeneratorPrefs();
-  const steps = parseNumber(elements.genSteps.value, 4, 1, 8);
   const handSize = parseNumber(elements.genHand.value, 4, 1, 8);
   const manaCap = parseNumber(elements.genMana.value, 10, 1, 20);
   const decoys = parseNumber(elements.genDecoys.value, 0, 0, 6);
@@ -582,7 +581,6 @@ function startGenerator() {
     runId,
     seed,
     rng,
-    steps,
     handSize,
     manaCap,
     decoys,
@@ -698,12 +696,8 @@ function buildPuzzleAttempt(state, attemptNumber) {
     targetRounds: state.targetRounds,
   });
 
-  const ghost = ghostWalk(
-    startState,
-    state.rng,
-    state.steps,
-    state.targetRounds
-  );
+  const steps = estimateMaxDepth(startState);
+  const ghost = ghostWalk(startState, state.rng, steps, state.targetRounds);
   if (ghost.trace.length === 0) {
     return null;
   }
@@ -711,7 +705,7 @@ function buildPuzzleAttempt(state, attemptNumber) {
     const base = materializeGhost(
       ghost,
       state.seed,
-      state.steps,
+      steps,
       state.targetRounds,
       state.manaPerRound
     );
