@@ -178,7 +178,10 @@ const elements = {
   genRounds: document.getElementById("gen-rounds"),
   genManaRound: document.getElementById("gen-mana-round"),
   genBoss: document.getElementById("gen-boss"),
+  genMaxSolutions: document.getElementById("gen-max-solutions"),
   genRun: document.getElementById("gen-run"),
+  genStop: document.getElementById("gen-stop"),
+  genAttempts: document.getElementById("gen-attempts"),
 };
 
 const PUZZLE_LIBRARY = [
@@ -268,6 +271,9 @@ let failureState = false;
 let solverState = null;
 let solverCancel = false;
 let lastSolverResults = { wins: [], startState: null };
+let generatorState = null;
+let generatorCancel = false;
+let generatorRunId = 0;
 const KEYWORD_TOOLTIPS = {
   guard: "Guard: must be attacked before non-Guard targets.",
   storm: "Storm: can attack any target immediately.",
@@ -306,6 +312,7 @@ function resetState() {
   pendingAction = null;
   damageFlash = { creatures: new Set(), boss: false };
   failureState = false;
+  stopGenerator();
   stopSolver();
   stopAutoplay();
   resetSolverResults();
@@ -391,7 +398,11 @@ elements.panelToggle.addEventListener("click", () => {
 });
 
 elements.genRun.addEventListener("click", () => {
-  generatePuzzleFromInputs();
+  startGenerator();
+});
+
+elements.genStop?.addEventListener("click", () => {
+  stopGenerator();
 });
 
 elements.solveRun.addEventListener("click", () => {
@@ -489,7 +500,10 @@ function populatePuzzleSelect() {
   syncPuzzleSelect();
 }
 
-function generatePuzzleFromInputs() {
+function startGenerator() {
+  if (generatorState) {
+    stopGenerator();
+  }
   const useRandom = elements.genSeedRandom.checked;
   const seedValue = Number(elements.genSeed.value);
   const seed = useRandom
@@ -507,6 +521,12 @@ function generatePuzzleFromInputs() {
   const targetRounds = parseNumber(elements.genRounds.value, 1, 1, 6);
   const manaPerRound = parseNumber(elements.genManaRound.value, 0, 0, 10);
   const bossMax = parseNumber(elements.genBoss?.value ?? 0, 0, 0, 6);
+  const maxSolutions = parseNumber(
+    elements.genMaxSolutions?.value ?? 1,
+    1,
+    0,
+    10
+  );
 
   const rng = new Rng(seed);
   const bossNames = Object.keys(BOSS_ART);
@@ -526,41 +546,228 @@ function generatePuzzleFromInputs() {
     (card) => card.type === "creature"
   );
 
-  let puzzle = null;
-  for (let attempt = 0; attempt < 50 && !puzzle; attempt += 1) {
-    const hand = pickHand(rng, playable, handSize);
-    const bossBoard = buildBossBoard(rng, creaturePool, bossMax);
-    const startState = normalizeState({
-      player: {
-        mana: manaCap,
-        hand,
-        board: [],
-      },
-      opponent: {
-        name: bossName,
-        health: 30,
-        board: bossBoard,
-      },
-      manaPerRound,
-      targetRounds,
-    });
+  generatorCancel = false;
+  generatorRunId += 1;
+  const runId = generatorRunId;
+  generatorState = {
+    runId,
+    seed,
+    rng,
+    steps,
+    handSize,
+    manaCap,
+    decoys,
+    targetRounds,
+    manaPerRound,
+    bossMax,
+    bossName,
+    playable,
+    creaturePool,
+    maxSolutions,
+    attempts: 0,
+    solveState: null,
+  };
 
-    const ghost = ghostWalk(startState, rng, steps);
-    if (ghost.trace.length === 0) {
+  updateGeneratorUI({ running: true });
+  setStatus("Generating puzzle…");
+  stepGenerator(runId);
+}
+
+function stopGenerator() {
+  if (!generatorState) {
+    return;
+  }
+  generatorCancel = true;
+  finalizeGenerator(true);
+}
+
+function stepGenerator(runId = generatorState?.runId) {
+  if (!generatorState || generatorState.runId !== runId) {
+    return;
+  }
+  if (generatorCancel) {
+    finalizeGenerator(true);
+    return;
+  }
+
+  if (generatorState.solveState) {
+    stepGeneratorSolve(runId);
+    return;
+  }
+
+  let iterations = 0;
+  while (iterations < 2) {
+    if (generatorCancel) {
+      finalizeGenerator(true);
+      return;
+    }
+    const puzzle = buildPuzzleAttempt(generatorState);
+    generatorState.attempts += 1;
+    updateGeneratorUI({ running: true });
+    if (!puzzle) {
+      iterations += 1;
       continue;
     }
-    try {
-      const base = materializeGhost(
-        ghost,
-        seed,
-        steps,
-        targetRounds,
-        manaPerRound
-      );
-      puzzle = decoys > 0 ? addDecoys(base, rng, playable, decoys) : base;
-    } catch {
-      puzzle = null;
+    if (generatorState.maxSolutions <= 0) {
+      finalizeGenerator(false, puzzle);
+      return;
     }
+    startGeneratorSolve(puzzle);
+    window.setTimeout(() => stepGeneratorSolve(runId), 0);
+    return;
+  }
+
+  window.setTimeout(() => stepGenerator(runId), 0);
+}
+
+function buildPuzzleAttempt(state) {
+  const hand = pickHand(state.rng, state.playable, state.handSize);
+  const bossBoard = buildBossBoard(state.rng, state.creaturePool, state.bossMax);
+  const startState = normalizeState({
+    player: {
+      mana: state.manaCap,
+      hand,
+      board: [],
+    },
+    opponent: {
+      name: state.bossName,
+      health: 30,
+      board: bossBoard,
+    },
+    manaPerRound: state.manaPerRound,
+    targetRounds: state.targetRounds,
+  });
+
+  const ghost = ghostWalk(startState, state.rng, state.steps);
+  if (ghost.trace.length === 0) {
+    return null;
+  }
+  try {
+    const base = materializeGhost(
+      ghost,
+      state.seed,
+      state.steps,
+      state.targetRounds,
+      state.manaPerRound
+    );
+    return state.decoys > 0
+      ? addDecoys(base, state.rng, state.playable, state.decoys)
+      : base;
+  } catch {
+    return null;
+  }
+}
+
+function startGeneratorSolve(puzzle) {
+  if (!generatorState) {
+    return;
+  }
+  const startState = normalizeState({
+    player: puzzle.player,
+    opponent: puzzle.opponent,
+    manaPerRound: puzzle.manaPerRound ?? 0,
+    targetRounds: puzzle.targetRounds,
+  });
+  const maxDepth = estimateMaxDepth(startState);
+  generatorState.solveState = {
+    puzzle,
+    startState,
+    maxDepth,
+    wins: 0,
+    seen: new Map(),
+    stack: [{ state: startState, depth: 0 }],
+  };
+}
+
+function stepGeneratorSolve(runId = generatorState?.runId) {
+  if (!generatorState?.solveState || generatorState.runId !== runId) {
+    return;
+  }
+  const solver = generatorState.solveState;
+  let iterations = 0;
+
+  while (solver.stack.length > 0 && iterations < 250) {
+    if (generatorCancel) {
+      finalizeGenerator(true);
+      return;
+    }
+
+    const node = solver.stack.pop();
+
+    if (isWin(node.state)) {
+      solver.wins += 1;
+      if (solver.wins > generatorState.maxSolutions) {
+        generatorState.solveState = null;
+        window.setTimeout(() => stepGenerator(runId), 0);
+        return;
+      }
+      iterations += 1;
+      continue;
+    }
+
+    if (isPastRoundLimit(node.state)) {
+      iterations += 1;
+      continue;
+    }
+
+    if (node.depth >= solver.maxDepth) {
+      iterations += 1;
+      continue;
+    }
+
+    const key = JSON.stringify(node.state);
+    const prevDepth = solver.seen.get(key);
+    if (prevDepth !== undefined && prevDepth <= node.depth) {
+      iterations += 1;
+      continue;
+    }
+    solver.seen.set(key, node.depth);
+
+    const actions = getLegalActions(node.state, cardLibrary);
+    for (let i = actions.length - 1; i >= 0; i -= 1) {
+      const action = actions[i];
+      if (action.type === "end" && isFinalRoundForSolver(node.state)) {
+        continue;
+      }
+      try {
+        const next = applyAction(node.state, action, cardLibrary);
+        solver.stack.push({
+          state: next,
+          depth: node.depth + 1,
+        });
+      } catch {
+        continue;
+      }
+    }
+
+    iterations += 1;
+  }
+
+  if (solver.stack.length === 0) {
+    if (solver.wins > 0 && solver.wins <= generatorState.maxSolutions) {
+      finalizeGenerator(false, solver.puzzle);
+      return;
+    }
+    generatorState.solveState = null;
+    window.setTimeout(() => stepGenerator(runId), 0);
+    return;
+  }
+
+  window.setTimeout(() => stepGeneratorSolve(runId), 0);
+}
+
+function finalizeGenerator(cancelled, puzzle) {
+  if (!generatorState) {
+    return;
+  }
+  const attempts = generatorState.attempts;
+  updateGeneratorUI({ running: false });
+  generatorState = null;
+  generatorCancel = false;
+
+  if (cancelled) {
+    setStatus(`Generator stopped after ${attempts} attempt${attempts === 1 ? "" : "s"}.`, "warn");
+    return;
   }
 
   if (!puzzle) {
@@ -571,7 +778,34 @@ function generatePuzzleFromInputs() {
   currentPuzzle = puzzle;
   elements.puzzleJson.value = JSON.stringify(currentPuzzle, null, 2);
   resetState();
-  setStatus(`Generated ${puzzle.id}.`);
+  setStatus(`Generated ${puzzle.id} after ${attempts} attempt${attempts === 1 ? "" : "s"}.`);
+}
+
+function updateGeneratorUI(state) {
+  if (elements.genAttempts) {
+    elements.genAttempts.textContent = String(generatorState?.attempts ?? 0);
+  }
+  if (elements.genRun && elements.genStop) {
+    const running = Boolean(state?.running);
+    elements.genRun.disabled = running;
+    elements.genStop.disabled = !running;
+  }
+}
+
+function estimateMaxDepth(state) {
+  const roundsRaw = state.targetRounds;
+  const rounds =
+    typeof roundsRaw === "number" && Number.isFinite(roundsRaw)
+      ? roundsRaw
+      : Number(roundsRaw) || 1;
+  const handSize = state.player?.hand?.length ?? 0;
+  const baseBoardCount = state.player?.board?.length ?? 0;
+  const maxCreatures = baseBoardCount + handSize;
+  const plays = handSize;
+  const attacks = maxCreatures * rounds;
+  const activates = maxCreatures;
+  const ends = Math.max(0, rounds - 1);
+  return Math.max(1, plays + attacks + activates + ends);
 }
 
 function parseNumber(value, fallback, min, max) {

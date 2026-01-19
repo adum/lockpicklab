@@ -161,6 +161,7 @@ body::after {
   grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
   gap: 24px;
   padding: 24px 48px 48px;
+  align-items: start;
 }
 
 .board {
@@ -774,6 +775,10 @@ body::after {
   gap: 16px;
   align-content: start;
   position: relative;
+  align-self: start;
+  max-height: calc(100vh - 200px);
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .panel-toggle {
@@ -805,6 +810,8 @@ body::after {
 .panel-body {
   display: grid;
   gap: 16px;
+  overflow: auto;
+  min-height: 0;
 }
 
 .panel.collapsed .panel-body {
@@ -815,6 +822,20 @@ body::after {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
+}
+
+.generator-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.generator-attempts {
+  font-size: 0.75rem;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .field {
@@ -962,6 +983,8 @@ body::after {
   margin-top: 4px;
   font-size: 0.7rem;
   color: var(--muted);
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .solver-actions {

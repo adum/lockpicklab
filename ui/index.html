@@ -161,8 +161,25 @@
                 <span>Boss creatures (max)</span>
                 <input id="gen-boss" type="number" min="0" max="6" value="0" />
               </label>
+              <label class="field">
+                <span>Max solutions</span>
+                <input
+                  id="gen-max-solutions"
+                  type="number"
+                  min="0"
+                  max="10"
+                  value="1"
+                />
+                <span class="field-hint">0 = ignore</span>
+              </label>
             </div>
-            <button class="btn primary" id="gen-run">Generate puzzle</button>
+            <div class="generator-actions">
+              <button class="btn primary" id="gen-run">Generate puzzle</button>
+              <button class="btn ghost" id="gen-stop" disabled>Stop</button>
+              <div class="generator-attempts">
+                Attempts <span id="gen-attempts">0</span>
+              </div>
+            </div>
           </div>
 
           <div class="section">
