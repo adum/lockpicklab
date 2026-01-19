@@ -19,6 +19,7 @@ const SACRIFICE: Keyword = "sacrifice";
 const TESTUDO: Keyword = "testudo";
 const VENOM: Keyword = "venom";
 const BROOD: Keyword = "brood";
+const SCAVENGER: Keyword = "scavenger";
 const BROODLING_ID = "broodling";
 const WOODEN_SHIELD_ID = "wooden_shield";
 
@@ -108,6 +109,41 @@ function removeDead(board: CardInstance[], cards: CardLibrary): CardInstance[] {
     }
     return minion.power > 0;
   });
+}
+
+function countDeadCreatures(board: CardInstance[], cards: CardLibrary): number {
+  return board.filter(
+    (minion) => isCreatureInstance(minion, cards) && minion.power <= 0
+  ).length;
+}
+
+function applyScavengerBuffs(
+  state: GameState,
+  cards: CardLibrary,
+  deathCount: number
+): void {
+  if (deathCount <= 0) {
+    return;
+  }
+  [state.player.board, state.opponent.board].forEach((board) => {
+    board.forEach((minion) => {
+      if (isCreatureInstance(minion, cards) && hasKeyword(minion, SCAVENGER)) {
+        minion.power += deathCount;
+      }
+    });
+  });
+}
+
+function handleDeaths(state: GameState, cards: CardLibrary): void {
+  const deathCount =
+    countDeadCreatures(state.player.board, cards) +
+    countDeadCreatures(state.opponent.board, cards);
+  if (deathCount <= 0) {
+    return;
+  }
+  state.player.board = removeDead(state.player.board, cards);
+  state.opponent.board = removeDead(state.opponent.board, cards);
+  applyScavengerBuffs(state, cards, deathCount);
 }
 
 function applyDamageToMinion(minion: CardInstance, amount: number): void {
@@ -314,11 +350,7 @@ function applyPlay(state: GameState, action: PlayAction, cards: CardLibrary): Ga
       throw new Error("Cannot apply Wooden Shield to a 0-power creature");
     }
     applyModEffects(target, def);
-    if (playerIndex >= 0) {
-      state.player.board = removeDead(state.player.board, cards);
-    } else {
-      state.opponent.board = removeDead(state.opponent.board, cards);
-    }
+    handleDeaths(state, cards);
   }
 
   state.chainCount += 1;
@@ -382,7 +414,7 @@ function applySpellDamage(
       throw new Error(`Invalid spell target: ${target}`);
     }
     applyDamageToMinionWithSpawn(state, state.opponent.board, index, amount, "o", cards);
-    state.opponent.board = removeDead(state.opponent.board, cards);
+    handleDeaths(state, cards);
     return;
   }
 
@@ -469,8 +501,7 @@ function applyAttack(state: GameState, action: AttackAction, cards: CardLibrary)
   }
 
   attacker.tired = true;
-  state.player.board = removeDead(state.player.board, cards);
-  state.opponent.board = removeDead(state.opponent.board, cards);
+  handleDeaths(state, cards);
 
   return state;
 }
@@ -513,6 +544,7 @@ function applyActivate(
   if (effect.stat === "power") {
     target.power += effect.amount;
   }
+  applyScavengerBuffs(state, cards, 1);
 
   return state;
 }
@@ -523,8 +555,7 @@ function applyEnd(state: GameState, cards: CardLibrary): GameState {
   if (state.opponent.poison && state.opponent.poison > 0) {
     applyDamageToOpponent(state, state.opponent.poison);
   }
-  state.player.board = removeDead(state.player.board, cards);
-  state.opponent.board = removeDead(state.opponent.board, cards);
+  handleDeaths(state, cards);
   state.player.board.forEach((minion) => {
     minion.tired = false;
   });

@@ -9,6 +9,7 @@ const KEYWORD_TOOLTIPS = {
   pierce: "Pierce: excess power hits the boss.",
   chain: "Chain: bonus effect if a card was already played this round.",
   sacrifice: "Sacrifice: destroy this creature to give a friendly creature +4 power.",
+  scavenger: "Scavenger: gains +1 power whenever another creature dies.",
 };
 
 const CREATURE_ART = {

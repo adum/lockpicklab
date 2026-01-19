@@ -109,6 +109,14 @@
       "keywords": ["brood"]
     },
     {
+      "id": "gravewatcher",
+      "name": "Gravewatcher",
+      "type": "creature",
+      "cost": 2,
+      "stats": {"power": 1},
+      "keywords": ["scavenger"]
+    },
+    {
       "id": "broodling",
       "name": "Broodling",
       "type": "creature",

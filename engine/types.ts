@@ -7,7 +7,8 @@ export type Keyword =
   | "sacrifice"
   | "testudo"
   | "venom"
-  | "brood";
+  | "brood"
+  | "scavenger";
 
 export interface DamageEffect {
   type: "damage";

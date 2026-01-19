@@ -99,6 +99,14 @@ const fallbackCards = {
       keywords: ["venom"],
     },
     {
+      id: "gravewatcher",
+      name: "Gravewatcher",
+      type: "creature",
+      cost: 2,
+      stats: { power: 1 },
+      keywords: ["scavenger"],
+    },
+    {
       id: "broodmother",
       name: "Broodmother",
       type: "creature",
@@ -131,7 +139,7 @@ const defaultPuzzle = {
       "lancer",
       "fireball",
       "wooden_shield",
-      "spider",
+      "gravewatcher",
       "broodmother",
     ],
     board: [],
@@ -345,6 +353,8 @@ const KEYWORD_TOOLTIPS = {
   poison: "Poison: takes damage at the end of every round.",
   brood:
     "Brood: when this creature is damaged but survives, it spawns a Broodling next to it.",
+  scavenger:
+    "Scavenger: gains +1 power whenever another creature dies.",
   chain: "Chain: bonus effect if a card was already played this round.",
   sacrifice: "Sacrifice: destroy this creature to give a friendly creature +4 power.",
   tired: "Tired: this creature already attacked this round.",
