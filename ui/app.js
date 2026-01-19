@@ -185,6 +185,7 @@ const elements = {
   genAttempts: document.getElementById("gen-attempts"),
   genNote: document.getElementById("gen-note"),
   genAttemptLine: document.getElementById("gen-attempt-line"),
+  genReject: document.getElementById("gen-reject"),
 };
 
 const PUZZLE_LIBRARY = [
@@ -229,6 +230,8 @@ const SPELL_ART = {
   fireball: "./assets/spells/fireball.jpg",
   spark: "./assets/spells/spark.jpg",
 };
+
+const GENERATOR_PREFS_KEY = "lockpick.generatorPrefs";
 
 class Rng {
   constructor(seed) {
@@ -436,11 +439,28 @@ document.addEventListener("pointerdown", (event) => {
 });
 
 elements.genSeedRandom.addEventListener("change", () => {
-  const useRandom = elements.genSeedRandom.checked;
-  elements.genSeed.disabled = useRandom;
-  if (useRandom) {
-    elements.genSeed.value = "";
+  updateGeneratorSeedInput();
+  saveGeneratorPrefs();
+});
+
+[
+  elements.genSeed,
+  elements.genSteps,
+  elements.genHand,
+  elements.genMana,
+  elements.genDecoys,
+  elements.genRounds,
+  elements.genManaRound,
+  elements.genBossMin,
+  elements.genBossMax,
+  elements.genMaxSolutions,
+].forEach((input) => {
+  if (!input) {
+    return;
   }
+  input.addEventListener("input", () => {
+    saveGeneratorPrefs();
+  });
 });
 
 elements.puzzleSelect.addEventListener("change", () => {
@@ -517,6 +537,7 @@ function startGenerator() {
   if (!useRandom) {
     elements.genSeed.value = String(seed);
   }
+  saveGeneratorPrefs();
   const steps = parseNumber(elements.genSteps.value, 4, 1, 8);
   const handSize = parseNumber(elements.genHand.value, 4, 1, 8);
   const manaCap = parseNumber(elements.genMana.value, 10, 1, 20);
@@ -533,6 +554,8 @@ function startGenerator() {
     0,
     10
   );
+  const enforceSolutionCap = maxSolutions > 0;
+  const enforceEarlyWin = targetRounds > 1;
 
   const rng = new Rng(seed);
   const bossNames = Object.keys(BOSS_ART);
@@ -571,6 +594,8 @@ function startGenerator() {
     playable,
     creaturePool,
     maxSolutions,
+    enforceSolutionCap,
+    enforceEarlyWin,
     attempts: 0,
     solveState: null,
   };
@@ -579,6 +604,7 @@ function startGenerator() {
   setStatus("Generating puzzle…");
   setGeneratorNote("Generating candidates…");
   setGeneratorAttemptLine("Latest attempt: —");
+  setGeneratorReject("—");
   stepGenerator(runId);
 }
 
@@ -619,8 +645,10 @@ function stepGenerator(runId = generatorState?.runId) {
       iterations += 1;
       continue;
     }
-    if (generatorState.maxSolutions <= 0) {
-      finalizeGenerator(false, puzzle);
+    const shouldSolve =
+      generatorState.enforceSolutionCap || generatorState.enforceEarlyWin;
+    if (!shouldSolve) {
+      finalizeGenerator(false, puzzle, null);
       return;
     }
     startGeneratorSolve(puzzle);
@@ -670,7 +698,12 @@ function buildPuzzleAttempt(state, attemptNumber) {
     targetRounds: state.targetRounds,
   });
 
-  const ghost = ghostWalk(startState, state.rng, state.steps);
+  const ghost = ghostWalk(
+    startState,
+    state.rng,
+    state.steps,
+    state.targetRounds
+  );
   if (ghost.trace.length === 0) {
     return null;
   }
@@ -682,10 +715,19 @@ function buildPuzzleAttempt(state, attemptNumber) {
       state.targetRounds,
       state.manaPerRound
     );
+    if (state.targetRounds > 1) {
+      const baseCost = base.player.hand.reduce((sum, cardId) => {
+        const def = cardLibrary.byId[cardId];
+        return sum + (def?.cost ?? 0);
+      }, 0);
+      if (baseCost <= base.player.mana) {
+        return null;
+      }
+    }
     const puzzle =
       state.decoys > 0
-      ? addDecoys(base, state.rng, state.playable, state.decoys)
-      : base;
+        ? addDecoys(base, state.rng, state.playable, state.decoys)
+        : base;
     const handTypes = new Set(
       puzzle.player.hand
         .map((cardId) => cardLibrary.byId[cardId]?.type)
@@ -739,8 +781,25 @@ function stepGeneratorSolve(runId = generatorState?.runId) {
     const node = solver.stack.pop();
 
     if (isWin(node.state)) {
+      if (
+        generatorState.enforceEarlyWin &&
+        isEarlyWin(node.state, generatorState.targetRounds)
+      ) {
+        setGeneratorReject(
+          `Rejected attempt #${generatorState.attempts} (early win).`
+        );
+        generatorState.solveState = null;
+        window.setTimeout(() => stepGenerator(runId), 0);
+        return;
+      }
       solver.wins += 1;
-      if (solver.wins > generatorState.maxSolutions) {
+      if (
+        generatorState.enforceSolutionCap &&
+        solver.wins > generatorState.maxSolutions
+      ) {
+        setGeneratorReject(
+          `Rejected attempt #${generatorState.attempts} (${solver.wins} solutions).`
+        );
         generatorState.solveState = null;
         window.setTimeout(() => stepGenerator(runId), 0);
         return;
@@ -788,8 +847,12 @@ function stepGeneratorSolve(runId = generatorState?.runId) {
   }
 
   if (solver.stack.length === 0) {
-    if (solver.wins > 0 && solver.wins <= generatorState.maxSolutions) {
-      finalizeGenerator(false, solver.puzzle);
+    if (
+      solver.wins > 0 &&
+      (!generatorState.enforceSolutionCap ||
+        solver.wins <= generatorState.maxSolutions)
+    ) {
+      finalizeGenerator(false, solver.puzzle, solver.wins);
       return;
     }
     generatorState.solveState = null;
@@ -800,7 +863,7 @@ function stepGeneratorSolve(runId = generatorState?.runId) {
   window.setTimeout(() => stepGeneratorSolve(runId), 0);
 }
 
-function finalizeGenerator(cancelled, puzzle) {
+function finalizeGenerator(cancelled, puzzle, solutionsCount) {
   if (!generatorState) {
     return;
   }
@@ -808,6 +871,7 @@ function finalizeGenerator(cancelled, puzzle) {
   updateGeneratorUI({ running: false });
   generatorState = null;
   generatorCancel = false;
+  setGeneratorReject("—");
 
   if (cancelled) {
     setGeneratorNote(
@@ -826,10 +890,16 @@ function finalizeGenerator(cancelled, puzzle) {
   currentPuzzle = puzzle;
   elements.puzzleJson.value = JSON.stringify(currentPuzzle, null, 2);
   resetState();
+  const solutionLabel =
+    solutionsCount === null || solutionsCount === undefined
+      ? "solutions unchecked"
+      : `${solutionsCount} solution${solutionsCount === 1 ? "" : "s"}`;
   setGeneratorNote(
-    `Generated ${puzzle.id} after ${attempts} attempt${attempts === 1 ? "" : "s"}.`
+    `Generated ${puzzle.id} after ${attempts} attempt${attempts === 1 ? "" : "s"} (${solutionLabel}).`
   );
-  setStatus(`Generated ${puzzle.id} after ${attempts} attempt${attempts === 1 ? "" : "s"}.`);
+  setStatus(
+    `Generated ${puzzle.id} after ${attempts} attempt${attempts === 1 ? "" : "s"} (${solutionLabel}).`
+  );
 }
 
 function updateGeneratorUI(state) {
@@ -842,6 +912,8 @@ function updateGeneratorUI(state) {
     elements.genStop.disabled = !running;
   }
 }
+
+loadGeneratorPrefs();
 
 function setGeneratorNote(message) {
   if (!elements.genNote) {
@@ -856,6 +928,25 @@ function setGeneratorAttemptLine(message) {
   }
   elements.genAttemptLine.textContent = message;
 }
+
+function setGeneratorReject(message) {
+  if (!elements.genReject) {
+    return;
+  }
+  elements.genReject.textContent = message;
+}
+
+function isEarlyWin(state, targetRounds) {
+  const rounds =
+    typeof targetRounds === "number"
+      ? targetRounds
+      : Number(targetRounds ?? 0);
+  if (!Number.isFinite(rounds) || rounds <= 1) {
+    return false;
+  }
+  return state.turn < rounds;
+}
+
 
 function estimateMaxDepth(state) {
   const roundsRaw = state.targetRounds;
@@ -879,6 +970,94 @@ function parseNumber(value, fallback, min, max) {
     return fallback;
   }
   return Math.min(max, Math.max(min, parsed));
+}
+
+function updateGeneratorSeedInput() {
+  if (!elements.genSeedRandom || !elements.genSeed) {
+    return;
+  }
+  const useRandom = elements.genSeedRandom.checked;
+  elements.genSeed.disabled = useRandom;
+  if (useRandom) {
+    elements.genSeed.value = "";
+  }
+}
+
+function saveGeneratorPrefs() {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return;
+  }
+  const prefs = {
+    seedRandom: elements.genSeedRandom?.checked ?? true,
+    seed: elements.genSeed?.value ?? "",
+    steps: elements.genSteps?.value ?? "",
+    hand: elements.genHand?.value ?? "",
+    mana: elements.genMana?.value ?? "",
+    decoys: elements.genDecoys?.value ?? "",
+    rounds: elements.genRounds?.value ?? "",
+    manaRound: elements.genManaRound?.value ?? "",
+    bossMin: elements.genBossMin?.value ?? "",
+    bossMax: elements.genBossMax?.value ?? "",
+    maxSolutions: elements.genMaxSolutions?.value ?? "",
+  };
+  try {
+    window.localStorage.setItem(GENERATOR_PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    // Ignore storage errors (e.g., quota or privacy mode).
+  }
+}
+
+function loadGeneratorPrefs() {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return;
+  }
+  let prefs = null;
+  try {
+    const raw = window.localStorage.getItem(GENERATOR_PREFS_KEY);
+    if (!raw) {
+      return;
+    }
+    prefs = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  if (!prefs || typeof prefs !== "object") {
+    return;
+  }
+  if (elements.genSeedRandom && typeof prefs.seedRandom === "boolean") {
+    elements.genSeedRandom.checked = prefs.seedRandom;
+  }
+  if (elements.genSeed && typeof prefs.seed === "string") {
+    elements.genSeed.value = prefs.seed;
+  }
+  if (elements.genSteps && typeof prefs.steps === "string") {
+    elements.genSteps.value = prefs.steps;
+  }
+  if (elements.genHand && typeof prefs.hand === "string") {
+    elements.genHand.value = prefs.hand;
+  }
+  if (elements.genMana && typeof prefs.mana === "string") {
+    elements.genMana.value = prefs.mana;
+  }
+  if (elements.genDecoys && typeof prefs.decoys === "string") {
+    elements.genDecoys.value = prefs.decoys;
+  }
+  if (elements.genRounds && typeof prefs.rounds === "string") {
+    elements.genRounds.value = prefs.rounds;
+  }
+  if (elements.genManaRound && typeof prefs.manaRound === "string") {
+    elements.genManaRound.value = prefs.manaRound;
+  }
+  if (elements.genBossMin && typeof prefs.bossMin === "string") {
+    elements.genBossMin.value = prefs.bossMin;
+  }
+  if (elements.genBossMax && typeof prefs.bossMax === "string") {
+    elements.genBossMax.value = prefs.bossMax;
+  }
+  if (elements.genMaxSolutions && typeof prefs.maxSolutions === "string") {
+    elements.genMaxSolutions.value = prefs.maxSolutions;
+  }
+  updateGeneratorSeedInput();
 }
 
 function pickHand(rng, pool, count) {
@@ -918,13 +1097,38 @@ function buildBossBoard(rng, pool, minCount, maxCount) {
   return board;
 }
 
-function ghostWalk(startState, rng, steps) {
+function ghostWalk(startState, rng, steps, targetRounds) {
   let current = structuredClone(startState);
   const trace = [];
+  const roundsRaw = targetRounds ?? startState.targetRounds;
+  const rounds =
+    typeof roundsRaw === "number" && Number.isFinite(roundsRaw)
+      ? roundsRaw
+      : Number(roundsRaw) || 1;
+
+  if (rounds > 1 && steps <= rounds - 1) {
+    return { trace: [], startState, endState: current };
+  }
 
   for (let step = 0; step < steps; step += 1) {
     let actions = getLegalActions(current, cardLibrary);
-    actions = actions.filter((action) => action.type !== "end");
+    if (rounds <= 1) {
+      actions = actions.filter((action) => action.type !== "end");
+    } else {
+      if (current.turn >= rounds) {
+        actions = actions.filter((action) => action.type !== "end");
+      } else {
+        const endsRemaining = rounds - current.turn;
+        const stepsLeft = steps - step;
+        if (stepsLeft <= endsRemaining) {
+          return { trace: [], startState, endState: current };
+        }
+        const endAction = actions.find((action) => action.type === "end");
+        if (endAction && stepsLeft === endsRemaining + 1) {
+          actions = [endAction];
+        }
+      }
+    }
     if (actions.length === 0) {
       break;
     }
@@ -944,6 +1148,8 @@ function materializeGhost(ghost, seed, steps, targetRounds, manaPerRound) {
     const def = cardLibrary.byId[cardId];
     return sum + (def?.cost ?? 0);
   }, 0);
+  const startingMana =
+    ghost.startState?.player?.mana ?? manaSpent;
 
   const damage = ghost.startState.opponent.health - ghost.endState.opponent.health;
   if (damage <= 0) {
@@ -964,7 +1170,7 @@ function materializeGhost(ghost, seed, steps, targetRounds, manaPerRound) {
     targetRounds,
     manaPerRound,
     player: {
-      mana: manaSpent,
+      mana: startingMana,
       hand: usedCards,
       board: [],
     },

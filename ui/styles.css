@@ -848,6 +848,11 @@ body::after {
   color: var(--muted);
 }
 
+.generator-reject {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
 .field {
   display: grid;
   gap: 6px;
