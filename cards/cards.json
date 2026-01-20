@@ -94,6 +94,15 @@
       ]
     },
     {
+      "id": "blightwave",
+      "name": "Blightwave",
+      "type": "spell",
+      "cost": 3,
+      "effects": [
+        {"type": "damage_all", "amount": 2}
+      ]
+    },
+    {
       "id": "iron_golem",
       "name": "Iron Golem",
       "type": "creature",
@@ -124,6 +133,22 @@
       "cost": 2,
       "stats": {"power": 1},
       "keywords": ["scavenger"]
+    },
+    {
+      "id": "emberling",
+      "name": "Emberling",
+      "type": "creature",
+      "cost": 2,
+      "stats": {"power": 1},
+      "keywords": ["rebirth"]
+    },
+    {
+      "id": "relay_spearman",
+      "name": "Relay Spearman",
+      "type": "creature",
+      "cost": 2,
+      "stats": {"power": 1},
+      "keywords": ["relay"]
     },
     {
       "id": "broodling",

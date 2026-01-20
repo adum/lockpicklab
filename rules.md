@@ -46,6 +46,8 @@ Creatures have a power stat. They may attack once in a round then become tired f
 
 Spells do instant things like damage the boss or make a creature not tired. Some have targets.
 
+Blightwave: deal 2 damage to all creatures on both sides.
+
 
 
 Effects stay on the battlefield indefinitely. For example, a War Banner effect gives all player creatures +1 power while attacking.
@@ -72,6 +74,12 @@ Brood: when a creature with Brood is damaged but survives, it spawns a Broodling
 
 
 Scavenger: whenever another creature dies, this creature gains +1 power.
+
+
+Rebirth: when this creature dies, it returns with +1 power.
+
+
+Relay: when this creature attacks another creature, adjacent allies gain power equal to the damage dealt.
 
 
 

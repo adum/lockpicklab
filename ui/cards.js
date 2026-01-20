@@ -10,6 +10,9 @@ const KEYWORD_TOOLTIPS = {
   chain: "Chain: bonus effect if a card was already played this round.",
   sacrifice: "Sacrifice: destroy this creature to give a friendly creature +4 power.",
   scavenger: "Scavenger: gains +1 power whenever another creature dies.",
+  rebirth: "Rebirth: when this creature dies, it returns with +1 power.",
+  relay:
+    "Relay: when this creature attacks a creature, adjacent allies gain power equal to the damage dealt.",
 };
 
 const CREATURE_ART = {
@@ -38,7 +41,10 @@ const MOD_PLACEHOLDER = "./assets/mods/placeholder.jpg";
 const SPELL_ART = {
   fireball: "./assets/spells/fireball.jpg",
   spark: "./assets/spells/spark.jpg",
+  blightwave: "./assets/spells/placeholder.jpg",
 };
+
+const SPELL_PLACEHOLDER = "./assets/spells/placeholder.jpg";
 
 function formatEffects(card) {
   if (!card.effects || card.effects.length === 0) {
@@ -49,6 +55,9 @@ function formatEffects(card) {
       if (effect.type === "damage") {
         const chain = effect.chain_amount ? ` (Chain ${effect.chain_amount})` : "";
         return `Deal ${effect.amount} damage${chain}`;
+      }
+      if (effect.type === "damage_all") {
+        return `Deal ${effect.amount} damage to all creatures`;
       }
       if (effect.type === "buff") {
         if (effect.amount < 0) {
@@ -130,7 +139,7 @@ function renderCards(cards) {
         let fallback = card.type === "creature" ? CREATURE_PLACEHOLDER : null;
         if (card.type === "spell") {
           artMap = SPELL_ART;
-          fallback = null;
+          fallback = SPELL_PLACEHOLDER;
         } else if (card.type === "effect") {
           artMap = EFFECT_ART;
           fallback = EFFECT_PLACEHOLDER;

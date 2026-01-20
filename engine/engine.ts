@@ -20,6 +20,8 @@ const TESTUDO: Keyword = "testudo";
 const VENOM: Keyword = "venom";
 const BROOD: Keyword = "brood";
 const SCAVENGER: Keyword = "scavenger";
+const REBIRTH: Keyword = "rebirth";
+const RELAY: Keyword = "relay";
 const BROODLING_ID = "broodling";
 const WOODEN_SHIELD_ID = "wooden_shield";
 
@@ -111,12 +113,6 @@ function removeDead(board: CardInstance[], cards: CardLibrary): CardInstance[] {
   });
 }
 
-function countDeadCreatures(board: CardInstance[], cards: CardLibrary): number {
-  return board.filter(
-    (minion) => isCreatureInstance(minion, cards) && minion.power <= 0
-  ).length;
-}
-
 function applyScavengerBuffs(
   state: GameState,
   cards: CardLibrary,
@@ -134,15 +130,98 @@ function applyScavengerBuffs(
   });
 }
 
+function getAdjacentCreatureIndexes(
+  board: CardInstance[],
+  index: number,
+  cards: CardLibrary
+): number[] {
+  const creatureIndexes: number[] = [];
+  board.forEach((entry, idx) => {
+    if (isCreatureInstance(entry, cards)) {
+      creatureIndexes.push(idx);
+    }
+  });
+  const position = creatureIndexes.indexOf(index);
+  if (position < 0) {
+    return [];
+  }
+  const neighbors: number[] = [];
+  if (position > 0) {
+    neighbors.push(creatureIndexes[position - 1]);
+  }
+  if (position < creatureIndexes.length - 1) {
+    neighbors.push(creatureIndexes[position + 1]);
+  }
+  return neighbors;
+}
+
+function applyRelayBuff(
+  board: CardInstance[],
+  sourceIndex: number,
+  amount: number,
+  cards: CardLibrary
+): void {
+  if (amount <= 0) {
+    return;
+  }
+  const neighbors = getAdjacentCreatureIndexes(board, sourceIndex, cards);
+  neighbors.forEach((idx) => {
+    const minion = board[idx];
+    if (minion && isCreatureInstance(minion, cards)) {
+      minion.power += amount;
+    }
+  });
+}
+
+function rebuildBoardWithRebirth(
+  state: GameState,
+  board: CardInstance[],
+  prefix: "p" | "o",
+  cards: CardLibrary
+): { board: CardInstance[]; deaths: number } {
+  const nextBoard: CardInstance[] = [];
+  let deaths = 0;
+  board.forEach((minion) => {
+    if (!isCreatureInstance(minion, cards)) {
+      nextBoard.push(minion);
+      return;
+    }
+    if (minion.power > 0) {
+      nextBoard.push(minion);
+      return;
+    }
+    deaths += 1;
+    if (hasKeyword(minion, REBIRTH)) {
+      const def = cards.byId[minion.card];
+      if (def && def.type === "creature") {
+        const rebirths = (minion.rebirths ?? 0) + 1;
+        const basePower = def.stats?.power ?? 1;
+        nextBoard.push({
+          uid: allocateUid(state, prefix),
+          card: def.id,
+          power: basePower + rebirths,
+          keywords: def.keywords ? [...def.keywords] : [],
+          mods: [],
+          tired: false,
+          poison: 0,
+          shield: 0,
+          rebirths,
+        });
+      }
+    }
+  });
+  return { board: nextBoard, deaths };
+}
+
 function handleDeaths(state: GameState, cards: CardLibrary): void {
-  const deathCount =
-    countDeadCreatures(state.player.board, cards) +
-    countDeadCreatures(state.opponent.board, cards);
+  const playerResult = rebuildBoardWithRebirth(state, state.player.board, "p", cards);
+  const opponentResult = rebuildBoardWithRebirth(state, state.opponent.board, "o", cards);
+  const deathCount = playerResult.deaths + opponentResult.deaths;
   if (deathCount <= 0) {
     return;
   }
-  state.player.board = removeDead(state.player.board, cards);
-  state.opponent.board = removeDead(state.opponent.board, cards);
+  state.player.board = playerResult.board;
+  state.opponent.board = opponentResult.board;
   applyScavengerBuffs(state, cards, deathCount);
 }
 
@@ -212,6 +291,7 @@ function spawnBroodling(
     tired: false,
     poison: 0,
     shield: 0,
+    rebirths: 0,
   };
   board.splice(insertIndex, 0, instance);
 }
@@ -335,6 +415,7 @@ function applyPlay(state: GameState, action: PlayAction, cards: CardLibrary): Ga
       tired: false,
       poison: 0,
       shield: 0,
+      rebirths: 0,
     };
     state.player.board.push(instance);
   } else if (def.type === "spell") {
@@ -349,6 +430,7 @@ function applyPlay(state: GameState, action: PlayAction, cards: CardLibrary): Ga
       tired: false,
       poison: 0,
       shield: 0,
+      rebirths: 0,
     };
     state.player.board.push(instance);
   } else if (def.type === "mod") {
@@ -413,6 +495,9 @@ function applySpellEffects(
       const amount = state.chainCount > 0 && effect.chain_amount ? effect.chain_amount : base;
       applySpellDamage(state, amount, target, cards);
     }
+    if (effect.type === "damage_all") {
+      applySpellDamageAll(state, effect.amount, cards);
+    }
   }
 }
 
@@ -442,6 +527,23 @@ function applySpellDamage(
   }
 
   throw new Error(`Unsupported spell target: ${target}`);
+}
+
+function applySpellDamageAll(
+  state: GameState,
+  amount: number,
+  cards: CardLibrary
+): void {
+  if (amount <= 0) {
+    return;
+  }
+  for (let index = 0; index < state.player.board.length; index += 1) {
+    applyDamageToMinionWithSpawn(state, state.player.board, index, amount, "p", cards);
+  }
+  for (let index = 0; index < state.opponent.board.length; index += 1) {
+    applyDamageToMinionWithSpawn(state, state.opponent.board, index, amount, "o", cards);
+  }
+  handleDeaths(state, cards);
 }
 
 function applyAttack(state: GameState, action: AttackAction, cards: CardLibrary): GameState {
@@ -491,7 +593,10 @@ function applyAttack(state: GameState, action: AttackAction, cards: CardLibrary)
   }
   const attackerShielded = hasTestudoCover(state.player.board, sourceIndex, cards);
   const defenderShielded = hasTestudoCover(state.opponent.board, targetIndex, cards);
+  const defenderHasShield = (defender.shield ?? 0) > 0;
   const defenderPowerBefore = defender.power;
+  const damageDealt =
+    defenderShielded || defenderHasShield ? 0 : Math.max(0, attackPower);
   if (!defenderShielded) {
     applyDamageToMinionWithSpawn(
       state,
@@ -521,6 +626,9 @@ function applyAttack(state: GameState, action: AttackAction, cards: CardLibrary)
     if (excess > 0) {
       applyDamageToOpponent(state, excess);
     }
+  }
+  if (hasKeyword(attacker, RELAY) && damageDealt > 0) {
+    applyRelayBuff(state.player.board, sourceIndex, damageDealt, cards);
   }
 
   attacker.tired = true;
@@ -563,11 +671,11 @@ function applyActivate(
     throw new Error("No sacrifice buff effect defined");
   }
 
-  state.player.board.splice(sourceIndex, 1);
+  source.power = 0;
+  handleDeaths(state, cards);
   if (effect.stat === "power") {
     target.power += effect.amount;
   }
-  applyScavengerBuffs(state, cards, 1);
 
   return state;
 }

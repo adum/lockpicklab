@@ -116,7 +116,8 @@
         },
         "tired": {"type": "boolean", "default": false},
         "poison": {"type": "integer", "minimum": 0, "default": 0},
-        "shield": {"type": "integer", "minimum": 0, "default": 0}
+        "shield": {"type": "integer", "minimum": 0, "default": 0},
+        "rebirths": {"type": "integer", "minimum": 0, "default": 0}
       }
     },
     "action": {

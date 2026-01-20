@@ -10,6 +10,7 @@ function cloneInstance(instance: CardInstance): CardInstance {
     tired: instance.tired,
     poison: instance.poison ?? 0,
     shield: instance.shield ?? 0,
+    rebirths: instance.rebirths ?? 0,
   };
 }
 
@@ -75,10 +76,12 @@ export function normalizeState(input: {
   player.board.forEach((unit) => {
     unit.poison = unit.poison ?? 0;
     unit.shield = unit.shield ?? 0;
+    unit.rebirths = unit.rebirths ?? 0;
   });
   opponent.board.forEach((unit) => {
     unit.poison = unit.poison ?? 0;
     unit.shield = unit.shield ?? 0;
+    unit.rebirths = unit.rebirths ?? 0;
   });
   opponent.poison = opponent.poison ?? 0;
 

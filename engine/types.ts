@@ -8,12 +8,19 @@ export type Keyword =
   | "testudo"
   | "venom"
   | "brood"
-  | "scavenger";
+  | "scavenger"
+  | "rebirth"
+  | "relay";
 
 export interface DamageEffect {
   type: "damage";
   amount: number;
   chain_amount?: number;
+}
+
+export interface DamageAllEffect {
+  type: "damage_all";
+  amount: number;
 }
 
 export interface BuffEffect {
@@ -49,6 +56,7 @@ export interface ShieldEffect {
 
 export type EffectDefinition =
   | DamageEffect
+  | DamageAllEffect
   | BuffEffect
   | AuraEffect
   | EndBuffEffect
@@ -80,6 +88,7 @@ export interface CardInstance {
   tired: boolean;
   poison?: number;
   shield?: number;
+  rebirths?: number;
 }
 
 export interface SideState {

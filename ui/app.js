@@ -90,6 +90,13 @@ const fallbackCards = {
       effects: [{ type: "damage", amount: 6 }],
     },
     {
+      id: "blightwave",
+      name: "Blightwave",
+      type: "spell",
+      cost: 3,
+      effects: [{ type: "damage_all", amount: 2 }],
+    },
+    {
       id: "iron_golem",
       name: "Iron Golem",
       type: "creature",
@@ -112,6 +119,22 @@ const fallbackCards = {
       cost: 2,
       stats: { power: 1 },
       keywords: ["scavenger"],
+    },
+    {
+      id: "emberling",
+      name: "Emberling",
+      type: "creature",
+      cost: 2,
+      stats: { power: 1 },
+      keywords: ["rebirth"],
+    },
+    {
+      id: "relay_spearman",
+      name: "Relay Spearman",
+      type: "creature",
+      cost: 2,
+      stats: { power: 1 },
+      keywords: ["relay"],
     },
     {
       id: "broodmother",
@@ -144,10 +167,10 @@ const defaultPuzzle = {
     hand: [
       "cultist",
       "lancer",
-      "wooden_shield",
-      "gravewatcher",
       "broodmother",
       "vigil_banner",
+      "blightwave",
+      "relay_spearman",
     ],
     board: [],
   },
@@ -299,7 +322,10 @@ const MOD_PLACEHOLDER = "./assets/mods/placeholder.jpg";
 const SPELL_ART = {
   fireball: "./assets/spells/fireball.jpg",
   spark: "./assets/spells/spark.jpg",
+  blightwave: "./assets/spells/placeholder.jpg",
 };
+
+const SPELL_PLACEHOLDER = "./assets/spells/placeholder.jpg";
 
 const GENERATOR_PREFS_KEY = "lockpick.generatorPrefs";
 
@@ -363,6 +389,10 @@ const KEYWORD_TOOLTIPS = {
     "Brood: when this creature is damaged but survives, it spawns a Broodling next to it.",
   scavenger:
     "Scavenger: gains +1 power whenever another creature dies.",
+  rebirth:
+    "Rebirth: when this creature dies, it returns with +1 power.",
+  relay:
+    "Relay: when this creature attacks a creature, adjacent allies gain power equal to the damage dealt.",
   chain: "Chain: bonus effect if a card was already played this round.",
   sacrifice: "Sacrifice: destroy this creature to give a friendly creature +4 power.",
   tired: "Tired: this creature already attacked this round.",
@@ -1207,6 +1237,9 @@ function syncPuzzleFromState() {
       if (unit.shield && unit.shield > 0) {
         entry.shield = unit.shield;
       }
+      if (unit.rebirths && unit.rebirths > 0) {
+        entry.rebirths = unit.rebirths;
+      }
       return entry;
     }),
   };
@@ -1228,6 +1261,9 @@ function syncPuzzleFromState() {
       }
       if (unit.shield && unit.shield > 0) {
         entry.shield = unit.shield;
+      }
+      if (unit.rebirths && unit.rebirths > 0) {
+        entry.rebirths = unit.rebirths;
       }
       return entry;
     }),
@@ -1258,6 +1294,7 @@ function createInstanceFromCard(cardId, prefix) {
     tired: false,
     poison: 0,
     shield: 0,
+    rebirths: 0,
   };
 }
 
@@ -2227,7 +2264,7 @@ function renderBoard(container, list, side, options = {}) {
       let fallback = def?.type === "creature" ? CREATURE_PLACEHOLDER : null;
       if (def?.type === "spell") {
         artMap = SPELL_ART;
-        fallback = null;
+        fallback = SPELL_PLACEHOLDER;
       } else if (def?.type === "effect") {
         artMap = EFFECT_ART;
         fallback = EFFECT_PLACEHOLDER;
@@ -2498,7 +2535,7 @@ function renderHand(container, hand) {
       let fallback = def?.type === "creature" ? CREATURE_PLACEHOLDER : null;
       if (def?.type === "spell") {
         artMap = SPELL_ART;
-        fallback = null;
+        fallback = SPELL_PLACEHOLDER;
       } else if (def?.type === "effect") {
         artMap = EFFECT_ART;
         fallback = EFFECT_PLACEHOLDER;
@@ -2659,6 +2696,10 @@ function formatCardDescription(def) {
     if (effect.type === "damage") {
       const chain = effect.chain_amount ? ` (Chain ${effect.chain_amount})` : "";
       parts.push(`Deal ${effect.amount} dmg${chain}`);
+      return;
+    }
+    if (effect.type === "damage_all") {
+      parts.push(`Deal ${effect.amount} dmg to all creatures`);
       return;
     }
     if (effect.type === "buff") {
