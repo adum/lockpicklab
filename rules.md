@@ -82,6 +82,15 @@ Rebirth: when this creature dies, it returns with +1 power.
 Relay: when this creature attacks another creature, adjacent allies gain power equal to the damage dealt.
 
 
+Requiem Rune: when a creature with this mod dies, deal 2 damage to the boss.
+
+
+Order: can only be played if you control an untired creature; when played, all your creatures become tired.
+
+
+Sleepy: enters the board already tired.
+
+
 
 At the end of the round any creature that is tired becomes rested. The player gets more mana according to the setup. (Mana carries over).
 

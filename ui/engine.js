@@ -8,6 +8,8 @@ const BROOD = "brood";
 const SCAVENGER = "scavenger";
 const REBIRTH = "rebirth";
 const RELAY = "relay";
+const ORDER = "order";
+const SLEEPY = "sleepy";
 const BROODLING_ID = "broodling";
 const WOODEN_SHIELD_ID = "wooden_shield";
 
@@ -202,6 +204,23 @@ function applyScavengerBuffs(state, cards, deathCount) {
   });
 }
 
+function getDeathDamageFromMods(minion, cards) {
+  const mods = Array.isArray(minion.mods) ? minion.mods : [];
+  let total = 0;
+  mods.forEach((modId) => {
+    const def = cards.byId[modId];
+    if (!def || def.type !== "mod") {
+      return;
+    }
+    (def.effects ?? []).forEach((effect) => {
+      if (effect.type === "death_damage_boss") {
+        total += effect.amount ?? 0;
+      }
+    });
+  });
+  return total;
+}
+
 function getAdjacentCreatureIndexes(board, index, cards) {
   const creatureIndexes = [];
   board.forEach((entry, idx) => {
@@ -239,6 +258,7 @@ function applyRelayBuff(board, sourceIndex, amount, cards) {
 function rebuildBoardWithRebirth(state, board, prefix, cards) {
   const nextBoard = [];
   let deaths = 0;
+  let deathDamage = 0;
   board.forEach((minion) => {
     if (!isCreatureInstance(minion, cards)) {
       nextBoard.push(minion);
@@ -249,6 +269,7 @@ function rebuildBoardWithRebirth(state, board, prefix, cards) {
       return;
     }
     deaths += 1;
+    deathDamage += getDeathDamageFromMods(minion, cards);
     if (hasKeyword(minion, REBIRTH)) {
       const def = cards.byId[minion.card];
       if (def && def.type === "creature") {
@@ -268,18 +289,32 @@ function rebuildBoardWithRebirth(state, board, prefix, cards) {
       }
     }
   });
-  return { board: nextBoard, deaths };
+  return { board: nextBoard, deaths, deathDamage };
 }
 
 function handleDeaths(state, cards) {
-  const playerResult = rebuildBoardWithRebirth(state, state.player.board, "p", cards);
-  const opponentResult = rebuildBoardWithRebirth(state, state.opponent.board, "o", cards);
+  const playerResult = rebuildBoardWithRebirth(
+    state,
+    state.player.board,
+    "p",
+    cards
+  );
+  const opponentResult = rebuildBoardWithRebirth(
+    state,
+    state.opponent.board,
+    "o",
+    cards
+  );
   const deathCount = playerResult.deaths + opponentResult.deaths;
   if (deathCount <= 0) {
     return;
   }
   state.player.board = playerResult.board;
   state.opponent.board = opponentResult.board;
+  const deathDamage = playerResult.deathDamage + opponentResult.deathDamage;
+  if (deathDamage > 0) {
+    applyDamageToOpponent(state, deathDamage);
+  }
   applyScavengerBuffs(state, cards, deathCount);
 }
 
@@ -435,6 +470,18 @@ function applyPlay(state, action, cards) {
   if (state.player.mana < def.cost) {
     throw new Error(`Not enough mana for ${action.card}`);
   }
+  if (def.type === "creature") {
+    const requiresReadyAlly =
+      def.effects?.some((effect) => effect.type === "requires_ready_ally") ?? false;
+    if (requiresReadyAlly) {
+      const hasReadyAlly = state.player.board.some(
+        (minion) => isCreatureInstance(minion, cards) && !minion.tired
+      );
+      if (!hasReadyAlly) {
+        throw new Error("Requires an untired creature already on your board");
+      }
+    }
+  }
 
   state.player.hand.splice(handIndex, 1);
   state.player.mana -= def.cost;
@@ -449,12 +496,19 @@ function applyPlay(state, action, cards) {
       power: def.stats.power,
       keywords: def.keywords ? [...def.keywords] : [],
       mods: [],
-      tired: false,
+      tired: def.effects?.some((effect) => effect.type === "enter_tired") ?? false,
       poison: 0,
       shield: 0,
       rebirths: 0,
     };
     state.player.board.push(instance);
+    if (def.effects?.some((effect) => effect.type === "play_tire_allies")) {
+      state.player.board.forEach((minion) => {
+        if (isCreatureInstance(minion, cards)) {
+          minion.tired = true;
+        }
+      });
+    }
   } else if (def.type === "spell") {
     applySpellEffects(state, def.effects ?? [], action.target, cards);
   } else if (def.type === "effect") {
@@ -800,6 +854,19 @@ export function getLegalActions(state, cards) {
         actions.push({ type: "play", card: cardId, target })
       );
       return;
+    }
+
+    if (def.type === "creature") {
+      const requiresReadyAlly =
+        def.effects?.some((effect) => effect.type === "requires_ready_ally") ?? false;
+      if (requiresReadyAlly) {
+        const hasReadyAlly = state.player.board.some(
+          (minion) => isCreatureInstance(minion, cards) && !minion.tired
+        );
+        if (!hasReadyAlly) {
+          return;
+        }
+      }
     }
 
     actions.push({ type: "play", card: cardId });

@@ -42,6 +42,13 @@ const fallbackCards = {
       ],
     },
     {
+      id: "requiem_rune",
+      name: "Requiem Rune",
+      type: "mod",
+      cost: 1,
+      effects: [{ type: "death_damage_boss", amount: 2 }],
+    },
+    {
       id: "war_banner",
       name: "War Banner",
       type: "effect",
@@ -133,8 +140,26 @@ const fallbackCards = {
       name: "Relay Spearman",
       type: "creature",
       cost: 2,
-      stats: { power: 1 },
+      stats: { power: 2 },
       keywords: ["relay"],
+    },
+    {
+      id: "line_captain",
+      name: "Line Captain",
+      type: "creature",
+      cost: 2,
+      stats: { power: 5 },
+      keywords: ["order"],
+      effects: [{ type: "requires_ready_ally" }, { type: "play_tire_allies" }],
+    },
+    {
+      id: "drowsy_squire",
+      name: "Drowsy Squire",
+      type: "creature",
+      cost: 1,
+      stats: { power: 2 },
+      keywords: ["sleepy"],
+      effects: [{ type: "enter_tired" }],
     },
     {
       id: "broodmother",
@@ -168,9 +193,9 @@ const defaultPuzzle = {
       "cultist",
       "lancer",
       "broodmother",
-      "vigil_banner",
       "blightwave",
       "relay_spearman",
+      "drowsy_squire",
     ],
     board: [],
   },
@@ -315,6 +340,7 @@ const MOD_ART = {
   piercing_rune: "./assets/mods/placeholder.jpg",
   testudo_rune: "./assets/mods/placeholder.jpg",
   wooden_shield: "./assets/mods/placeholder.jpg",
+  requiem_rune: "./assets/mods/placeholder.jpg",
 };
 
 const MOD_PLACEHOLDER = "./assets/mods/placeholder.jpg";
@@ -393,6 +419,9 @@ const KEYWORD_TOOLTIPS = {
     "Rebirth: when this creature dies, it returns with +1 power.",
   relay:
     "Relay: when this creature attacks a creature, adjacent allies gain power equal to the damage dealt.",
+  order:
+    "Order: can only be played if you have an untired creature; when played, all your creatures become tired.",
+  sleepy: "Sleepy: enters play tired.",
   chain: "Chain: bonus effect if a card was already played this round.",
   sacrifice: "Sacrifice: destroy this creature to give a friendly creature +4 power.",
   tired: "Tired: this creature already attacked this round.",
@@ -2700,6 +2729,10 @@ function formatCardDescription(def) {
     }
     if (effect.type === "damage_all") {
       parts.push(`Deal ${effect.amount} dmg to all creatures`);
+      return;
+    }
+    if (effect.type === "death_damage_boss") {
+      parts.push(`On death: deal ${effect.amount} dmg to boss`);
       return;
     }
     if (effect.type === "buff") {

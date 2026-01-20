@@ -10,7 +10,9 @@ export type Keyword =
   | "brood"
   | "scavenger"
   | "rebirth"
-  | "relay";
+  | "relay"
+  | "order"
+  | "sleepy";
 
 export interface DamageEffect {
   type: "damage";
@@ -21,6 +23,23 @@ export interface DamageEffect {
 export interface DamageAllEffect {
   type: "damage_all";
   amount: number;
+}
+
+export interface DeathDamageBossEffect {
+  type: "death_damage_boss";
+  amount: number;
+}
+
+export interface RequiresReadyAllyEffect {
+  type: "requires_ready_ally";
+}
+
+export interface PlayTireAlliesEffect {
+  type: "play_tire_allies";
+}
+
+export interface EnterTiredEffect {
+  type: "enter_tired";
 }
 
 export interface BuffEffect {
@@ -57,6 +76,10 @@ export interface ShieldEffect {
 export type EffectDefinition =
   | DamageEffect
   | DamageAllEffect
+  | DeathDamageBossEffect
+  | RequiresReadyAllyEffect
+  | PlayTireAlliesEffect
+  | EnterTiredEffect
   | BuffEffect
   | AuraEffect
   | EndBuffEffect

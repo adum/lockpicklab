@@ -40,6 +40,15 @@
       ]
     },
     {
+      "id": "requiem_rune",
+      "name": "Requiem Rune",
+      "type": "mod",
+      "cost": 1,
+      "effects": [
+        {"type": "death_damage_boss", "amount": 2}
+      ]
+    },
+    {
       "id": "war_banner",
       "name": "War Banner",
       "type": "effect",
@@ -147,8 +156,31 @@
       "name": "Relay Spearman",
       "type": "creature",
       "cost": 2,
-      "stats": {"power": 1},
+      "stats": {"power": 2},
       "keywords": ["relay"]
+    },
+    {
+      "id": "line_captain",
+      "name": "Line Captain",
+      "type": "creature",
+      "cost": 2,
+      "stats": {"power": 5},
+      "keywords": ["order"],
+      "effects": [
+        {"type": "requires_ready_ally"},
+        {"type": "play_tire_allies"}
+      ]
+    },
+    {
+      "id": "drowsy_squire",
+      "name": "Drowsy Squire",
+      "type": "creature",
+      "cost": 1,
+      "stats": {"power": 2},
+      "keywords": ["sleepy"],
+      "effects": [
+        {"type": "enter_tired"}
+      ]
     },
     {
       "id": "broodling",

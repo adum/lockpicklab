@@ -13,6 +13,9 @@ const KEYWORD_TOOLTIPS = {
   rebirth: "Rebirth: when this creature dies, it returns with +1 power.",
   relay:
     "Relay: when this creature attacks a creature, adjacent allies gain power equal to the damage dealt.",
+  order:
+    "Order: can only be played if you have an untired creature; when played, all your creatures become tired.",
+  sleepy: "Sleepy: enters play tired.",
 };
 
 const CREATURE_ART = {
@@ -34,6 +37,7 @@ const MOD_ART = {
   piercing_rune: "./assets/mods/placeholder.jpg",
   testudo_rune: "./assets/mods/placeholder.jpg",
   wooden_shield: "./assets/mods/placeholder.jpg",
+  requiem_rune: "./assets/mods/placeholder.jpg",
 };
 
 const MOD_PLACEHOLDER = "./assets/mods/placeholder.jpg";
@@ -58,6 +62,9 @@ function formatEffects(card) {
       }
       if (effect.type === "damage_all") {
         return `Deal ${effect.amount} damage to all creatures`;
+      }
+      if (effect.type === "death_damage_boss") {
+        return `On death: deal ${effect.amount} damage to boss`;
       }
       if (effect.type === "buff") {
         if (effect.amount < 0) {
