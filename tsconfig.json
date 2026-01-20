@@ -15,6 +15,7 @@
     "solver/**/*.ts",
     "generator/**/*.ts",
     "ui/**/*.ts",
-    "scripts/**/*.ts"
+    "scripts/**/*.ts",
+    "types/**/*.d.ts"
   ]
 }

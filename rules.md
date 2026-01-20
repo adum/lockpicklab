@@ -48,6 +48,8 @@ Spells do instant things like damage the boss or make a creature not tired. Some
 
 Blightwave: deal 2 damage to all creatures on both sides.
 
+Toxic Mist: give all your creatures Venom.
+
 
 
 Effects stay on the battlefield indefinitely. For example, a War Banner effect gives all player creatures +1 power while attacking.

@@ -30,6 +30,16 @@ export interface DeathDamageBossEffect {
   amount: number;
 }
 
+export interface PoisonAlliesEffect {
+  type: "poison_allies";
+  amount: number;
+}
+
+export interface GrantKeywordAlliesEffect {
+  type: "grant_keyword_allies";
+  keyword: Keyword;
+}
+
 export interface RequiresReadyAllyEffect {
   type: "requires_ready_ally";
 }
@@ -77,6 +87,8 @@ export type EffectDefinition =
   | DamageEffect
   | DamageAllEffect
   | DeathDamageBossEffect
+  | PoisonAlliesEffect
+  | GrantKeywordAlliesEffect
   | RequiresReadyAllyEffect
   | PlayTireAlliesEffect
   | EnterTiredEffect

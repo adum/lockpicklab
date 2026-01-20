@@ -23,7 +23,7 @@ const state = normalizeState({
   targetRounds: puzzle.targetRounds,
 });
 
-const result = solve(state, cards, { maxDepth: 8, maxWins: 3 });
+const result = solve(state, cards, { maxWins: 3 });
 
 console.log(`Puzzle: ${puzzle.id}`);
 console.log(`Difficulty: ${puzzle.difficulty}`);

@@ -112,6 +112,15 @@
       ]
     },
     {
+      "id": "toxic_mist",
+      "name": "Toxic Mist",
+      "type": "spell",
+      "cost": 2,
+      "effects": [
+        {"type": "grant_keyword_allies", "keyword": "venom"}
+      ]
+    },
+    {
       "id": "iron_golem",
       "name": "Iron Golem",
       "type": "creature",

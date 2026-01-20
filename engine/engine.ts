@@ -552,6 +552,12 @@ function applySpellEffects(
     if (effect.type === "damage_all") {
       applySpellDamageAll(state, effect.amount, cards);
     }
+    if (effect.type === "poison_allies") {
+      applySpellPoisonAllies(state, effect.amount, cards);
+    }
+    if (effect.type === "grant_keyword_allies") {
+      applySpellGrantKeywordAllies(state, effect.keyword, cards);
+    }
   }
 }
 
@@ -598,6 +604,36 @@ function applySpellDamageAll(
     applyDamageToMinionWithSpawn(state, state.opponent.board, index, amount, "o", cards);
   }
   handleDeaths(state, cards);
+}
+
+function applySpellPoisonAllies(
+  state: GameState,
+  amount: number,
+  cards: CardLibrary
+): void {
+  if (amount <= 0) {
+    return;
+  }
+  state.player.board.forEach((minion) => {
+    if (isCreatureInstance(minion, cards)) {
+      applyPoisonToMinion(minion, amount);
+    }
+  });
+}
+
+function applySpellGrantKeywordAllies(
+  state: GameState,
+  keyword: Keyword,
+  cards: CardLibrary
+): void {
+  state.player.board.forEach((minion) => {
+    if (isCreatureInstance(minion, cards)) {
+      minion.keywords = minion.keywords ?? [];
+      if (!minion.keywords.includes(keyword)) {
+        minion.keywords.push(keyword);
+      }
+    }
+  });
 }
 
 function applyAttack(state: GameState, action: AttackAction, cards: CardLibrary): GameState {

@@ -13,7 +13,7 @@ function hashState(state: GameState): string {
 
 function isFinalRound(state: GameState): boolean {
   const totalRounds = state.targetRounds;
-  if (!Number.isFinite(totalRounds)) {
+  if (typeof totalRounds !== "number" || !Number.isFinite(totalRounds)) {
     return false;
   }
   return totalRounds - (state.turn - 1) === 1;
@@ -21,7 +21,7 @@ function isFinalRound(state: GameState): boolean {
 
 function isPastRoundLimit(state: GameState): boolean {
   const totalRounds = state.targetRounds;
-  if (!Number.isFinite(totalRounds)) {
+  if (typeof totalRounds !== "number" || !Number.isFinite(totalRounds)) {
     return false;
   }
   return state.turn > totalRounds;
@@ -34,7 +34,6 @@ export function solve(
     maxWins?: number;
   }
 ): SolveResult {
-  const maxDepth = estimateMaxDepth(state);
   const maxWinsRaw = options?.maxWins ?? 0;
   const maxWins =
     maxWinsRaw === 0 ? Number.POSITIVE_INFINITY : maxWinsRaw;
@@ -55,7 +54,7 @@ export function solve(
       return;
     }
 
-    if (depth >= maxDepth || wins.length >= maxWins) {
+    if (wins.length >= maxWins) {
       return;
     }
 
@@ -88,20 +87,4 @@ export function solve(
   dfs(state, 0, []);
 
   return { wins, visited, expanded };
-}
-
-function estimateMaxDepth(state: GameState): number {
-  const roundsRaw = state.targetRounds;
-  const rounds =
-    typeof roundsRaw === "number" && Number.isFinite(roundsRaw)
-      ? roundsRaw
-      : Number(roundsRaw) || 1;
-  const handSize = state.player?.hand?.length ?? 0;
-  const baseBoardCount = state.player?.board?.length ?? 0;
-  const maxCreatures = baseBoardCount + handSize;
-  const plays = handSize;
-  const attacks = maxCreatures * rounds;
-  const activates = maxCreatures;
-  const ends = Math.max(0, rounds - 1);
-  return Math.max(1, plays + attacks + activates + ends);
 }

@@ -104,6 +104,13 @@ const fallbackCards = {
       effects: [{ type: "damage_all", amount: 2 }],
     },
     {
+      id: "toxic_mist",
+      name: "Toxic Mist",
+      type: "spell",
+      cost: 2,
+      effects: [{ type: "grant_keyword_allies", keyword: "venom" }],
+    },
+    {
       id: "iron_golem",
       name: "Iron Golem",
       type: "creature",
@@ -195,7 +202,7 @@ const defaultPuzzle = {
       "broodmother",
       "blightwave",
       "relay_spearman",
-      "drowsy_squire",
+      "toxic_mist",
     ],
     board: [],
   },
@@ -349,6 +356,7 @@ const SPELL_ART = {
   fireball: "./assets/spells/fireball.jpg",
   spark: "./assets/spells/spark.jpg",
   blightwave: "./assets/spells/placeholder.jpg",
+  toxic_mist: "./assets/spells/placeholder.jpg",
 };
 
 const SPELL_PLACEHOLDER = "./assets/spells/placeholder.jpg";
@@ -2729,6 +2737,14 @@ function formatCardDescription(def) {
     }
     if (effect.type === "damage_all") {
       parts.push(`Deal ${effect.amount} dmg to all creatures`);
+      return;
+    }
+    if (effect.type === "grant_keyword_allies") {
+      parts.push(`Give your creatures ${formatKeyword(effect.keyword)}`);
+      return;
+    }
+    if (effect.type === "poison_allies") {
+      parts.push(`Give your creatures ${effect.amount} poison`);
       return;
     }
     if (effect.type === "death_damage_boss") {

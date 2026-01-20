@@ -46,6 +46,7 @@ const SPELL_ART = {
   fireball: "./assets/spells/fireball.jpg",
   spark: "./assets/spells/spark.jpg",
   blightwave: "./assets/spells/placeholder.jpg",
+  toxic_mist: "./assets/spells/placeholder.jpg",
 };
 
 const SPELL_PLACEHOLDER = "./assets/spells/placeholder.jpg";
@@ -62,6 +63,12 @@ function formatEffects(card) {
       }
       if (effect.type === "damage_all") {
         return `Deal ${effect.amount} damage to all creatures`;
+      }
+      if (effect.type === "grant_keyword_allies") {
+        return `Give your creatures ${formatKeyword(effect.keyword)}`;
+      }
+      if (effect.type === "poison_allies") {
+        return `Give your creatures ${effect.amount} poison`;
       }
       if (effect.type === "death_damage_boss") {
         return `On death: deal ${effect.amount} damage to boss`;
