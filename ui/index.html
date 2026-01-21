@@ -135,10 +135,6 @@
                 </div>
               </label>
               <label class="field">
-                <span>Steps</span>
-                <input id="gen-steps" type="number" min="1" max="8" value="4" />
-              </label>
-              <label class="field">
                 <span>Hand size</span>
                 <input id="gen-hand" type="number" min="1" max="8" value="4" />
               </label>
@@ -172,10 +168,30 @@
                   id="gen-max-solutions"
                   type="number"
                   min="0"
-                  max="10"
                   value="1"
                 />
                 <span class="field-hint">0 = ignore</span>
+              </label>
+              <label class="field">
+                <span>Action budget</span>
+                <input
+                  id="gen-action-budget"
+                  type="number"
+                  min="25"
+                  max="1000"
+                  value="200"
+                />
+              </label>
+              <label class="field">
+                <span>Solver budget</span>
+                <input
+                  id="gen-solver-budget"
+                  type="number"
+                  min="0"
+                  max="500000"
+                  value="75000"
+                />
+                <span class="field-hint">0 = infinite</span>
               </label>
             </div>
             <div class="generator-actions">

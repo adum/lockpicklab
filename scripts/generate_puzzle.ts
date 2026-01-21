@@ -6,13 +6,11 @@ import { CardDefinition } from "../engine/types";
 import { ghostWalk, materialize, obfuscate, Rng } from "../generator/generator";
 
 const seedArg = process.argv[2];
-const stepsArg = process.argv[3];
-const handArg = process.argv[4];
-const manaArg = process.argv[5];
-const outputArg = process.argv[6];
+const handArg = process.argv[3];
+const manaArg = process.argv[4];
+const outputArg = process.argv[5];
 
 const seed = seedArg ? Number(seedArg) : Date.now();
-const steps = stepsArg ? Number(stepsArg) : 4;
 const handSize = handArg ? Number(handArg) : 4;
 const manaCap = manaArg ? Number(manaArg) : 10;
 
@@ -65,18 +63,23 @@ while (!puzzle && attempts < maxAttempts) {
   attempts += 1;
   const hand = pickHand(handSize);
   const startState = buildState(hand);
-  const ghost = ghostWalk(startState, cards, steps, {
+  const ghost = ghostWalk(startState, cards, {
     rng,
-    excludeEnd: true,
+    targetRounds: 1,
     stopOnWin: false,
+    maxActions: 200,
   });
+  if (ghost.aborted) {
+    continue;
+  }
   if (ghost.trace.length === 0) {
     continue;
   }
   try {
+    const actionCount = ghost.trace.length;
     const base = materialize(ghost, cards, {
       seed,
-      difficulty: steps >= 5 ? "hard" : steps >= 3 ? "medium" : "easy",
+      difficulty: actionCount >= 5 ? "hard" : actionCount >= 3 ? "medium" : "easy",
       targetRounds: 1,
       manaPerRound: 0,
     });

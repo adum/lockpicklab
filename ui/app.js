@@ -293,7 +293,6 @@ const elements = {
   panelToggle: document.getElementById("panel-toggle"),
   genSeed: document.getElementById("gen-seed"),
   genSeedRandom: document.getElementById("gen-seed-random"),
-  genSteps: document.getElementById("gen-steps"),
   genHand: document.getElementById("gen-hand"),
   genMana: document.getElementById("gen-mana"),
   genDecoys: document.getElementById("gen-decoys"),
@@ -302,6 +301,8 @@ const elements = {
   genBossMin: document.getElementById("gen-boss-min"),
   genBossMax: document.getElementById("gen-boss-max"),
   genMaxSolutions: document.getElementById("gen-max-solutions"),
+  genActionBudget: document.getElementById("gen-action-budget"),
+  genSolverBudget: document.getElementById("gen-solver-budget"),
   genRun: document.getElementById("gen-run"),
   genStop: document.getElementById("gen-stop"),
   genAttempts: document.getElementById("gen-attempts"),
@@ -362,6 +363,8 @@ const SPELL_ART = {
 const SPELL_PLACEHOLDER = "./assets/spells/placeholder.jpg";
 
 const GENERATOR_PREFS_KEY = "lockpick.generatorPrefs";
+const GENERATOR_MAX_GHOST_ACTIONS = 200;
+const GENERATOR_MAX_SOLVER_NODES = 75000;
 
 class Rng {
   constructor(seed) {
@@ -698,7 +701,6 @@ elements.genSeedRandom.addEventListener("change", () => {
 
 [
   elements.genSeed,
-  elements.genSteps,
   elements.genHand,
   elements.genMana,
   elements.genDecoys,
@@ -707,6 +709,8 @@ elements.genSeedRandom.addEventListener("change", () => {
   elements.genBossMin,
   elements.genBossMax,
   elements.genMaxSolutions,
+  elements.genActionBudget,
+  elements.genSolverBudget,
 ].forEach((input) => {
   if (!input) {
     return;
@@ -798,16 +802,28 @@ function startGenerator() {
   const manaPerRound = parseNumber(elements.genManaRound.value, 0, 0, 10);
   const bossMin = parseNumber(elements.genBossMin?.value ?? 0, 0, 0, 6);
   const bossMax = parseNumber(elements.genBossMax?.value ?? 0, 0, 0, 6);
+  const actionBudget = parseNumber(
+    elements.genActionBudget?.value ?? GENERATOR_MAX_GHOST_ACTIONS,
+    GENERATOR_MAX_GHOST_ACTIONS,
+    25,
+    1000
+  );
+  const solverBudgetRaw = parseNumber(
+    elements.genSolverBudget?.value ?? GENERATOR_MAX_SOLVER_NODES,
+    GENERATOR_MAX_SOLVER_NODES,
+    0,
+    500000
+  );
+  const solverBudget =
+    solverBudgetRaw === 0 ? Number.POSITIVE_INFINITY : solverBudgetRaw;
   const bossMinClamped = Math.max(0, bossMin);
   const bossMaxClamped = Math.max(bossMax, bossMinClamped);
-  const maxSolutions = parseNumber(
-    elements.genMaxSolutions?.value ?? 1,
-    1,
-    0,
-    10
-  );
+  const maxSolutionsValue = Number(elements.genMaxSolutions?.value ?? 1);
+  const maxSolutions = Number.isFinite(maxSolutionsValue) ? maxSolutionsValue : 1;
   const enforceSolutionCap = maxSolutions > 0;
   const enforceEarlyWin = targetRounds > 1;
+  const solverStepsLabel =
+    solverBudget === Number.POSITIVE_INFINITY ? "∞" : String(solverBudget);
 
   const rng = new Rng(seed);
   const bossNames = Object.keys(BOSS_ART);
@@ -842,6 +858,8 @@ function startGenerator() {
     bossMin: bossMinClamped,
     bossMax: bossMaxClamped,
     bossName,
+    actionBudget,
+    solverBudget,
     playable,
     creaturePool,
     maxSolutions,
@@ -853,7 +871,7 @@ function startGenerator() {
 
   updateGeneratorUI({ running: true });
   setStatus("Generating puzzle…");
-  setGeneratorNote("Generating candidates…");
+  setGeneratorNote(`Generating candidates… (solver: 0/${solverStepsLabel})`);
   setGeneratorAttemptLine("Latest attempt: —");
   setGeneratorReject("—");
   stepGenerator(runId);
@@ -912,10 +930,11 @@ function stepGenerator(runId = generatorState?.runId) {
 
 function buildPuzzleAttempt(state, attemptNumber) {
   const hand = pickHand(state.rng, state.playable, state.handSize);
+  const handLabel = hand
+    .map((cardId) => cardLibrary.byId[cardId]?.name ?? cardId)
+    .join(", ");
   setGeneratorAttemptLine(
-    `Attempt #${attemptNumber}: ${hand
-      .map((cardId) => cardLibrary.byId[cardId]?.name ?? cardId)
-      .join(", ")}`
+    `Attempt #${attemptNumber}: ${handLabel}`
   );
   const handTypes = new Set(
     hand
@@ -949,8 +968,25 @@ function buildPuzzleAttempt(state, attemptNumber) {
     targetRounds: state.targetRounds,
   });
 
-  const steps = estimateMaxDepth(startState);
-  const ghost = ghostWalk(startState, state.rng, steps, state.targetRounds);
+  const ghost = ghostWalk(
+    startState,
+    state.rng,
+    state.targetRounds,
+    state.actionBudget
+  );
+  const actionCount = ghost.trace.length;
+  const actionSuffix = ghost.aborted
+    ? ` (actions: ${actionCount}, budget)`
+    : ` (actions: ${actionCount})`;
+  setGeneratorAttemptLine(
+    `Attempt #${attemptNumber}: ${handLabel}${actionSuffix}`
+  );
+  if (ghost.aborted) {
+    setGeneratorReject(
+      `Rejected attempt #${attemptNumber} (action budget exceeded).`
+    );
+    return null;
+  }
   if (ghost.trace.length === 0) {
     return null;
   }
@@ -958,7 +994,6 @@ function buildPuzzleAttempt(state, attemptNumber) {
     const base = materializeGhost(
       ghost,
       state.seed,
-      steps,
       state.targetRounds,
       state.manaPerRound
     );
@@ -999,17 +1034,23 @@ function startGeneratorSolve(puzzle) {
     manaPerRound: puzzle.manaPerRound ?? 0,
     targetRounds: puzzle.targetRounds,
   });
-  const maxDepth = estimateMaxDepth(startState);
   generatorState.solveState = {
     puzzle,
     startState,
-    maxDepth,
     wins: 0,
+    visited: 0,
+    maxNodes: generatorState.solverBudget ?? GENERATOR_MAX_SOLVER_NODES,
     seen: new Map(),
     stack: [{ state: startState, depth: 0 }],
   };
   const attempt = generatorState.attempts;
-  setGeneratorNote(`Checking solutions for attempt #${attempt}…`);
+  const nodeLimitLabel =
+    generatorState.solveState.maxNodes === Number.POSITIVE_INFINITY
+      ? "∞"
+      : String(generatorState.solveState.maxNodes);
+  setGeneratorNote(
+    `Checking solutions for attempt #${attempt}… (0/${nodeLimitLabel})`
+  );
 }
 
 function stepGeneratorSolve(runId = generatorState?.runId) {
@@ -1026,6 +1067,19 @@ function stepGeneratorSolve(runId = generatorState?.runId) {
     }
 
     const node = solver.stack.pop();
+    solver.visited += 1;
+    if (
+      solver.maxNodes !== Number.POSITIVE_INFINITY &&
+      solver.visited >= solver.maxNodes
+    ) {
+      finalizeGenerator(
+        false,
+        solver.puzzle,
+        solver.wins,
+        `solver budget hit at ${solver.visited} steps`
+      );
+      return;
+    }
 
     if (isWin(node.state)) {
       if (
@@ -1107,10 +1161,15 @@ function stepGeneratorSolve(runId = generatorState?.runId) {
     return;
   }
 
+  const nodeLimitLabel =
+    solver.maxNodes === Number.POSITIVE_INFINITY ? "∞" : String(solver.maxNodes);
+  setGeneratorNote(
+    `Checking solutions for attempt #${generatorState.attempts}… (${solver.visited}/${nodeLimitLabel})`
+  );
   window.setTimeout(() => stepGeneratorSolve(runId), 0);
 }
 
-function finalizeGenerator(cancelled, puzzle, solutionsCount) {
+function finalizeGenerator(cancelled, puzzle, solutionsCount, noteSuffix) {
   if (!generatorState) {
     return;
   }
@@ -1118,7 +1177,6 @@ function finalizeGenerator(cancelled, puzzle, solutionsCount) {
   updateGeneratorUI({ running: false });
   generatorState = null;
   generatorCancel = false;
-  setGeneratorReject("—");
 
   if (cancelled) {
     setGeneratorNote(
@@ -1141,11 +1199,12 @@ function finalizeGenerator(cancelled, puzzle, solutionsCount) {
     solutionsCount === null || solutionsCount === undefined
       ? "solutions unchecked"
       : `${solutionsCount} solution${solutionsCount === 1 ? "" : "s"}`;
+  const extraNote = noteSuffix ? ` (${noteSuffix})` : "";
   setGeneratorNote(
-    `Generated ${puzzle.id} after ${attempts} attempt${attempts === 1 ? "" : "s"} (${solutionLabel}).`
+    `Generated ${puzzle.id} after ${attempts} attempt${attempts === 1 ? "" : "s"} (${solutionLabel})${extraNote}.`
   );
   setStatus(
-    `Generated ${puzzle.id} after ${attempts} attempt${attempts === 1 ? "" : "s"} (${solutionLabel}).`
+    `Generated ${puzzle.id} after ${attempts} attempt${attempts === 1 ? "" : "s"} (${solutionLabel})${extraNote}.`
   );
 }
 
@@ -1401,7 +1460,6 @@ function saveGeneratorPrefs() {
   const prefs = {
     seedRandom: elements.genSeedRandom?.checked ?? true,
     seed: elements.genSeed?.value ?? "",
-    steps: elements.genSteps?.value ?? "",
     hand: elements.genHand?.value ?? "",
     mana: elements.genMana?.value ?? "",
     decoys: elements.genDecoys?.value ?? "",
@@ -1410,6 +1468,8 @@ function saveGeneratorPrefs() {
     bossMin: elements.genBossMin?.value ?? "",
     bossMax: elements.genBossMax?.value ?? "",
     maxSolutions: elements.genMaxSolutions?.value ?? "",
+    actionBudget: elements.genActionBudget?.value ?? "",
+    solverBudget: elements.genSolverBudget?.value ?? "",
   };
   try {
     window.localStorage.setItem(GENERATOR_PREFS_KEY, JSON.stringify(prefs));
@@ -1441,9 +1501,6 @@ function loadGeneratorPrefs() {
   if (elements.genSeed && typeof prefs.seed === "string") {
     elements.genSeed.value = prefs.seed;
   }
-  if (elements.genSteps && typeof prefs.steps === "string") {
-    elements.genSteps.value = prefs.steps;
-  }
   if (elements.genHand && typeof prefs.hand === "string") {
     elements.genHand.value = prefs.hand;
   }
@@ -1467,6 +1524,12 @@ function loadGeneratorPrefs() {
   }
   if (elements.genMaxSolutions && typeof prefs.maxSolutions === "string") {
     elements.genMaxSolutions.value = prefs.maxSolutions;
+  }
+  if (elements.genActionBudget && typeof prefs.actionBudget === "string") {
+    elements.genActionBudget.value = prefs.actionBudget;
+  }
+  if (elements.genSolverBudget && typeof prefs.solverBudget === "string") {
+    elements.genSolverBudget.value = prefs.solverBudget;
   }
   updateGeneratorSeedInput();
 }
@@ -1508,7 +1571,7 @@ function buildBossBoard(rng, pool, minCount, maxCount) {
   return board;
 }
 
-function ghostWalk(startState, rng, steps, targetRounds) {
+function ghostWalk(startState, rng, targetRounds, maxActions) {
   let current = structuredClone(startState);
   const trace = [];
   const roundsRaw = targetRounds ?? startState.targetRounds;
@@ -1516,42 +1579,87 @@ function ghostWalk(startState, rng, steps, targetRounds) {
     typeof roundsRaw === "number" && Number.isFinite(roundsRaw)
       ? roundsRaw
       : Number(roundsRaw) || 1;
+  const seen = new Set();
+  const actionLimit =
+    Number.isFinite(maxActions) && maxActions > 0
+      ? maxActions
+      : GENERATOR_MAX_GHOST_ACTIONS;
 
-  if (rounds > 1 && steps <= rounds - 1) {
-    return { trace: [], startState, endState: current };
-  }
+  while (true) {
+    const key = JSON.stringify(current);
+    if (seen.has(key)) {
+      break;
+    }
+    seen.add(key);
 
-  for (let step = 0; step < steps; step += 1) {
-    let actions = getLegalActions(current, cardLibrary);
-    if (rounds <= 1) {
-      actions = actions.filter((action) => action.type !== "end");
+    const actions = getLegalActions(current, cardLibrary);
+    const nonEnd = actions.filter((action) => action.type !== "end");
+    const endActions = actions.filter((action) => action.type === "end");
+    let allowed = [];
+
+    if (rounds <= 1 || current.turn >= rounds) {
+      allowed = nonEnd;
+    } else if (nonEnd.length > 0) {
+      allowed = nonEnd;
     } else {
-      if (current.turn >= rounds) {
-        actions = actions.filter((action) => action.type !== "end");
-      } else {
-        const endsRemaining = rounds - current.turn;
-        const stepsLeft = steps - step;
-        if (stepsLeft <= endsRemaining) {
-          return { trace: [], startState, endState: current };
+      allowed = endActions;
+    }
+
+    if (allowed.length === 0) {
+      break;
+    }
+
+    let options = [];
+    for (const action of allowed) {
+      try {
+        const next = applyAction(current, action, cardLibrary);
+        const nextKey = JSON.stringify(next);
+        if (nextKey === key || seen.has(nextKey)) {
+          continue;
         }
-        const endAction = actions.find((action) => action.type === "end");
-        if (endAction && stepsLeft === endsRemaining + 1) {
-          actions = [endAction];
+        options.push({ action, next });
+      } catch {
+        continue;
+      }
+    }
+
+    if (
+      options.length === 0 &&
+      allowed !== endActions &&
+      rounds > 1 &&
+      current.turn < rounds &&
+      endActions.length > 0
+    ) {
+      for (const action of endActions) {
+        try {
+          const next = applyAction(current, action, cardLibrary);
+          const nextKey = JSON.stringify(next);
+          if (nextKey === key || seen.has(nextKey)) {
+            continue;
+          }
+          options.push({ action, next });
+        } catch {
+          continue;
         }
       }
     }
-    if (actions.length === 0) {
+
+    if (options.length === 0) {
       break;
     }
-    const action = rng.pick(actions);
-    current = applyAction(current, action, cardLibrary);
-    trace.push(action);
+
+    const pick = rng.pick(options);
+    current = pick.next;
+    trace.push(pick.action);
+    if (trace.length >= actionLimit) {
+      return { trace, startState, endState: current, aborted: true };
+    }
   }
 
   return { trace, startState, endState: current };
 }
 
-function materializeGhost(ghost, seed, steps, targetRounds, manaPerRound) {
+function materializeGhost(ghost, seed, targetRounds, manaPerRound) {
   const usedCards = ghost.trace
     .filter((action) => action.type === "play")
     .map((action) => action.card);
@@ -1561,6 +1669,7 @@ function materializeGhost(ghost, seed, steps, targetRounds, manaPerRound) {
   }, 0);
   const startingMana =
     ghost.startState?.player?.mana ?? manaSpent;
+  const actionCount = ghost.trace.length;
 
   const damage = ghost.startState.opponent.health - ghost.endState.opponent.health;
   if (damage <= 0) {
@@ -1575,7 +1684,7 @@ function materializeGhost(ghost, seed, steps, targetRounds, manaPerRound) {
 
   return {
     id: `puzzle_${seed}`,
-    difficulty: steps >= 5 ? "hard" : steps >= 3 ? "medium" : "easy",
+    difficulty: actionCount >= 5 ? "hard" : actionCount >= 3 ? "medium" : "easy",
     seed,
     tags: Array.from(tags),
     targetRounds,
@@ -2035,12 +2144,14 @@ function renderSolverResults() {
   }
   const wins = solverState?.wins ?? lastSolverResults.wins;
   const startState = solverState?.startState ?? lastSolverResults.startState;
+  const displayLimit = 10;
+  const totalWins = wins?.length ?? 0;
   container.innerHTML = "";
   if (!wins || wins.length === 0 || !startState) {
     container.innerHTML = '<div class="placeholder">No solutions yet.</div>';
     return;
   }
-  wins.forEach((path, index) => {
+  wins.slice(0, displayLimit).forEach((path, index) => {
     const card = document.createElement("div");
     card.className = "solver-solution";
 
@@ -2070,6 +2181,13 @@ function renderSolverResults() {
     card.appendChild(list);
     container.appendChild(card);
   });
+
+  if (totalWins > displayLimit) {
+    const note = document.createElement("div");
+    note.className = "solver-solution-note";
+    note.textContent = `Showing ${displayLimit} of ${totalWins} solutions.`;
+    container.appendChild(note);
+  }
 }
 
 function getPendingTargets() {

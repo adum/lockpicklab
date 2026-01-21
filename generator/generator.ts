@@ -6,6 +6,7 @@ export interface GhostResult {
   trace: Action[];
   state: GameState;
   startState: GameState;
+  aborted?: boolean;
 }
 
 export class Rng {
@@ -38,33 +39,103 @@ export interface GhostOptions {
   rng?: Rng;
   excludeEnd?: boolean;
   stopOnWin?: boolean;
+  targetRounds?: number;
+  maxActions?: number;
 }
 
 export function ghostWalk(
   state: GameState,
   cards: CardLibrary,
-  steps: number,
   options?: GhostOptions
 ): GhostResult {
   const rng = options?.rng ?? new Rng(Date.now());
-  const excludeEnd = options?.excludeEnd ?? true;
+  const excludeEnd = options?.excludeEnd ?? false;
   const stopOnWin = options?.stopOnWin ?? false;
+  const roundsRaw = options?.targetRounds ?? state.targetRounds;
+  const maxActions = options?.maxActions ?? 200;
+  const rounds =
+    typeof roundsRaw === "number" && Number.isFinite(roundsRaw)
+      ? roundsRaw
+      : Number(roundsRaw) || 1;
 
   const startState = cloneState(state);
   let current = cloneState(state);
   const trace: Action[] = [];
+  const seen = new Set<string>();
 
-  for (let step = 0; step < steps; step += 1) {
+  while (true) {
+    const key = JSON.stringify(current);
+    if (seen.has(key)) {
+      break;
+    }
+    seen.add(key);
+
     let actions = getLegalActions(current, cards);
     if (excludeEnd) {
       actions = actions.filter((action) => action.type !== "end");
     }
-    if (actions.length === 0) {
+    const nonEnd = actions.filter((action) => action.type !== "end");
+    let choices: Action[] = [];
+
+    if (excludeEnd) {
+      choices = actions;
+    } else if (rounds <= 1 || current.turn >= rounds) {
+      choices = nonEnd;
+    } else if (nonEnd.length > 0) {
+      choices = nonEnd;
+    } else {
+      choices = actions.filter((action) => action.type === "end");
+    }
+
+    if (choices.length === 0) {
       break;
     }
-    const action = rng.pick(actions);
-    current = applyAction(current, action, cards);
-    trace.push(action);
+
+    let options: { action: Action; next: GameState }[] = [];
+    for (const action of choices) {
+      try {
+        const next = applyAction(current, action, cards);
+        const nextKey = JSON.stringify(next);
+        if (nextKey === key || seen.has(nextKey)) {
+          continue;
+        }
+        options.push({ action, next });
+      } catch {
+        continue;
+      }
+    }
+
+    if (
+      options.length === 0 &&
+      !excludeEnd &&
+      rounds > 1 &&
+      current.turn < rounds
+    ) {
+      const endActions = actions.filter((action) => action.type === "end");
+      for (const action of endActions) {
+        try {
+          const next = applyAction(current, action, cards);
+          const nextKey = JSON.stringify(next);
+          if (nextKey === key || seen.has(nextKey)) {
+            continue;
+          }
+          options.push({ action, next });
+        } catch {
+          continue;
+        }
+      }
+    }
+
+    if (options.length === 0) {
+      break;
+    }
+
+    const pick = rng.pick(options);
+    current = pick.next;
+    trace.push(pick.action);
+    if (trace.length >= maxActions) {
+      return { trace, state: current, startState, aborted: true };
+    }
     if (stopOnWin && isWin(current)) {
       break;
     }
@@ -104,9 +175,14 @@ export function materialize(
     def?.keywords?.forEach((kw) => tags.add(kw));
   });
 
+  const actionCount = ghost.trace.length;
+  const difficulty =
+    options?.difficulty ??
+    (actionCount >= 5 ? "hard" : actionCount >= 3 ? "medium" : "easy");
+
   return {
     id: `puzzle_${options?.seed ?? Date.now()}`,
-    difficulty: options?.difficulty ?? "easy",
+    difficulty,
     seed: options?.seed,
     tags: Array.from(tags),
     targetRounds: options?.targetRounds ?? 1,
