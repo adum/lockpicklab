@@ -182,7 +182,7 @@ function renderCards(cards) {
       handCard.appendChild(topRow);
       handCard.appendChild(name);
 
-      if (card.type === "spell" || card.type === "effect" || card.type === "mod") {
+      if (card.effects && card.effects.length > 0) {
         const desc = document.createElement("div");
         desc.className = "hand-desc";
         desc.textContent = formatEffects(card) || "—";

@@ -2462,7 +2462,7 @@ function renderBoard(container, list, side, options = {}) {
     name.textContent = nameText;
 
     let desc = null;
-    if (def?.type === "spell" || def?.type === "effect" || def?.type === "mod") {
+    if (def?.effects && def.effects.length > 0) {
       const descText = formatCardDescription(def);
       if (descText) {
         desc = document.createElement("div");
