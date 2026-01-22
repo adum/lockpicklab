@@ -387,6 +387,34 @@ const SPELL_ART = {
 
 const SPELL_PLACEHOLDER = "./assets/spells/placeholder.jpg";
 
+function resolveCardArt(def, cardId) {
+  const type = def?.type;
+  let artMap = null;
+  let fallback = null;
+  let folder = null;
+  if (type === "spell") {
+    artMap = SPELL_ART;
+    fallback = SPELL_PLACEHOLDER;
+    folder = "spells";
+  } else if (type === "effect") {
+    artMap = EFFECT_ART;
+    fallback = EFFECT_PLACEHOLDER;
+    folder = "effects";
+  } else if (type === "mod") {
+    artMap = MOD_ART;
+    fallback = MOD_PLACEHOLDER;
+    folder = "mods";
+  } else {
+    artMap = CREATURE_ART;
+    fallback = CREATURE_PLACEHOLDER;
+    folder = "creatures";
+  }
+  const id = def?.id ?? cardId;
+  const mapped = id ? artMap[id] : null;
+  const auto = id ? `./assets/${folder}/${id}.jpg` : null;
+  return { src: mapped ?? auto ?? fallback, fallback };
+}
+
 const GENERATOR_PREFS_KEY = "lockpick.generatorPrefs";
 const GENERATOR_MAX_GHOST_ACTIONS = 200;
 const GENERATOR_MAX_SOLVER_NODES = 75000;
@@ -2416,25 +2444,19 @@ function renderBoard(container, list, side, options = {}) {
       def?.type === "effect" ||
       def?.type === "mod"
     ) {
-      let artMap = CREATURE_ART;
-      let fallback = def?.type === "creature" ? CREATURE_PLACEHOLDER : null;
-      if (def?.type === "spell") {
-        artMap = SPELL_ART;
-        fallback = SPELL_PLACEHOLDER;
-      } else if (def?.type === "effect") {
-        artMap = EFFECT_ART;
-        fallback = EFFECT_PLACEHOLDER;
-      } else if (def?.type === "mod") {
-        artMap = MOD_ART;
-        fallback = MOD_PLACEHOLDER;
-      }
-      const artSrc =
-        artMap[def?.id ?? unit.card] ?? fallback;
+      const { src: artSrc, fallback: artFallback } = resolveCardArt(def, unit.card);
       if (artSrc) {
         const artWrap = document.createElement("div");
         artWrap.className = "card-art";
         const artImg = document.createElement("img");
         artImg.src = artSrc;
+        if (artFallback && artFallback !== artSrc) {
+          artImg.onerror = () => {
+            if (artImg.src !== artFallback) {
+              artImg.src = artFallback;
+            }
+          };
+        }
         artImg.alt = `${nameText} art`;
         artWrap.appendChild(artImg);
         if (Array.isArray(unit.mods) && unit.mods.length > 0) {
@@ -2687,25 +2709,19 @@ function renderHand(container, hand) {
       def?.type === "effect" ||
       def?.type === "mod"
     ) {
-      let artMap = CREATURE_ART;
-      let fallback = def?.type === "creature" ? CREATURE_PLACEHOLDER : null;
-      if (def?.type === "spell") {
-        artMap = SPELL_ART;
-        fallback = SPELL_PLACEHOLDER;
-      } else if (def?.type === "effect") {
-        artMap = EFFECT_ART;
-        fallback = EFFECT_PLACEHOLDER;
-      } else if (def?.type === "mod") {
-        artMap = MOD_ART;
-        fallback = MOD_PLACEHOLDER;
-      }
-      const artSrc =
-        artMap[def?.id ?? cardId] ?? fallback;
+      const { src: artSrc, fallback: artFallback } = resolveCardArt(def, cardId);
       if (artSrc) {
         const artWrap = document.createElement("div");
         artWrap.className = "hand-art";
         const artImg = document.createElement("img");
         artImg.src = artSrc;
+        if (artFallback && artFallback !== artSrc) {
+          artImg.onerror = () => {
+            if (artImg.src !== artFallback) {
+              artImg.src = artFallback;
+            }
+          };
+        }
         artImg.alt = `${name} art`;
         artWrap.appendChild(artImg);
         chip.appendChild(artWrap);

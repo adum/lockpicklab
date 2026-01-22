@@ -38,6 +38,34 @@ const SPELL_ART = {
 
 const SPELL_PLACEHOLDER = "./assets/spells/placeholder.jpg";
 
+function resolveCardArt(card) {
+  const type = card?.type;
+  let artMap = null;
+  let fallback = null;
+  let folder = null;
+  if (type === "spell") {
+    artMap = SPELL_ART;
+    fallback = SPELL_PLACEHOLDER;
+    folder = "spells";
+  } else if (type === "effect") {
+    artMap = EFFECT_ART;
+    fallback = EFFECT_PLACEHOLDER;
+    folder = "effects";
+  } else if (type === "mod") {
+    artMap = MOD_ART;
+    fallback = MOD_PLACEHOLDER;
+    folder = "mods";
+  } else {
+    artMap = CREATURE_ART;
+    fallback = CREATURE_PLACEHOLDER;
+    folder = "creatures";
+  }
+  const id = card?.id;
+  const mapped = id ? artMap[id] : null;
+  const auto = id ? `./assets/${folder}/${id}.jpg` : null;
+  return { src: mapped ?? auto ?? fallback, fallback };
+}
+
 function formatEffects(card) {
   if (!card.effects || card.effects.length === 0) {
     return "";
@@ -136,25 +164,19 @@ function renderCards(cards) {
         card.type === "effect" ||
         card.type === "mod"
       ) {
-        let artMap = CREATURE_ART;
-        let fallback = card.type === "creature" ? CREATURE_PLACEHOLDER : null;
-        if (card.type === "spell") {
-          artMap = SPELL_ART;
-          fallback = SPELL_PLACEHOLDER;
-        } else if (card.type === "effect") {
-          artMap = EFFECT_ART;
-          fallback = EFFECT_PLACEHOLDER;
-        } else if (card.type === "mod") {
-          artMap = MOD_ART;
-          fallback = MOD_PLACEHOLDER;
-        }
-        const artSrc =
-          artMap[card.id] ?? fallback;
+        const { src: artSrc, fallback: artFallback } = resolveCardArt(card);
         if (artSrc) {
           const artWrap = document.createElement("div");
           artWrap.className = "hand-art";
           const artImg = document.createElement("img");
           artImg.src = artSrc;
+          if (artFallback && artFallback !== artSrc) {
+            artImg.onerror = () => {
+              if (artImg.src !== artFallback) {
+                artImg.src = artFallback;
+              }
+            };
+          }
           artImg.alt = `${card.name ?? card.id} art`;
           artWrap.appendChild(artImg);
           handCard.appendChild(artWrap);
