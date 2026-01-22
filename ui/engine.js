@@ -12,6 +12,7 @@ const ORDER = "order";
 const SLEEPY = "sleepy";
 const BROODLING_ID = "broodling";
 const WOODEN_SHIELD_ID = "wooden_shield";
+const FLANK_RUNE_ID = "flank_rune";
 
 export function buildCardLibrary(data) {
   const byId = {};
@@ -440,6 +441,32 @@ function applyEndBuffs(state, cards) {
   });
 }
 
+function applyEndAdjacentBuffs(state, board, cards) {
+  const buffs = {};
+  board.forEach((minion, index) => {
+    if (!isCreatureInstance(minion, cards)) {
+      return;
+    }
+    if (!minion.mods?.includes(FLANK_RUNE_ID)) {
+      return;
+    }
+    const left = index - 1;
+    const right = index + 1;
+    if (left >= 0 && isCreatureInstance(board[left], cards)) {
+      buffs[left] = (buffs[left] ?? 0) + 1;
+    }
+    if (right < board.length && isCreatureInstance(board[right], cards)) {
+      buffs[right] = (buffs[right] ?? 0) + 1;
+    }
+  });
+  Object.entries(buffs).forEach(([index, amount]) => {
+    const target = board[Number(index)];
+    if (target && isCreatureInstance(target, cards)) {
+      target.power += amount;
+    }
+  });
+}
+
 export function isWin(state) {
   return state.opponent.health <= 0;
 }
@@ -789,6 +816,8 @@ function applyEnd(state, cards) {
   }
   handleDeaths(state, cards);
   applyEndBuffs(state, cards);
+  applyEndAdjacentBuffs(state, state.player.board, cards);
+  applyEndAdjacentBuffs(state, state.opponent.board, cards);
   state.player.board.forEach((minion) => {
     minion.tired = false;
   });

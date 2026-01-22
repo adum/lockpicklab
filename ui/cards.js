@@ -1,22 +1,8 @@
 import { initTooltips } from "./tooltip.js";
+import { KEYWORD_TOOLTIPS, formatKeyword } from "./keywords.js";
 
 const container = document.getElementById("cards-container");
 const searchInput = document.getElementById("card-search");
-
-const KEYWORD_TOOLTIPS = {
-  guard: "Guard: must be attacked before non-Guard targets.",
-  storm: "Storm: can attack any target immediately.",
-  pierce: "Pierce: excess power hits the boss.",
-  chain: "Chain: bonus effect if a card was already played this round.",
-  sacrifice: "Sacrifice: destroy this creature to give a friendly creature +4 power.",
-  scavenger: "Scavenger: gains +1 power whenever another creature dies.",
-  rebirth: "Rebirth: when this creature dies, it returns with +1 power.",
-  relay:
-    "Relay: when this creature attacks a creature, adjacent allies gain power equal to the damage dealt.",
-  order:
-    "Order: can only be played if you have an untired creature; when played, all your creatures become tired.",
-  sleepy: "Sleepy: enters play tired.",
-};
 
 const CREATURE_ART = {
   cultist: "./assets/creatures/cultist.jpg",
@@ -38,6 +24,7 @@ const MOD_ART = {
   testudo_rune: "./assets/mods/placeholder.jpg",
   wooden_shield: "./assets/mods/placeholder.jpg",
   requiem_rune: "./assets/mods/placeholder.jpg",
+  flank_rune: "./assets/mods/placeholder.jpg",
 };
 
 const MOD_PLACEHOLDER = "./assets/mods/placeholder.jpg";
@@ -94,6 +81,9 @@ function formatEffects(card) {
         }
         return `End of round: +${effect.amount} ${effect.stat}`;
       }
+      if (effect.type === "end_adjacent_buff") {
+        return `End of round: adjacent allies gain +${effect.amount} power`;
+      }
       if (effect.type === "grant_keyword") {
         return `Grant ${formatKeyword(effect.keyword)}`;
       }
@@ -103,12 +93,6 @@ function formatEffects(card) {
     .join("; ");
 }
 
-function formatKeyword(keyword) {
-  if (!keyword) {
-    return "";
-  }
-  return `${keyword.charAt(0).toUpperCase()}${keyword.slice(1)}`;
-}
 
 function renderCards(cards) {
   container.innerHTML = "";

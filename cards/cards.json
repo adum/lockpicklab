@@ -49,6 +49,15 @@
       ]
     },
     {
+      "id": "flank_rune",
+      "name": "Flank Rune",
+      "type": "mod",
+      "cost": 2,
+      "effects": [
+        {"type": "end_adjacent_buff", "stat": "power", "amount": 1}
+      ]
+    },
+    {
       "id": "war_banner",
       "name": "War Banner",
       "type": "effect",
@@ -91,6 +100,14 @@
       "type": "creature",
       "cost": 4,
       "stats": {"power": 5},
+      "keywords": ["pierce"]
+    },
+    {
+      "id": "behemoth",
+      "name": "Behemoth",
+      "type": "creature",
+      "cost": 9,
+      "stats": {"power": 11},
       "keywords": ["pierce"]
     },
     {

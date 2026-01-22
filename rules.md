@@ -86,6 +86,8 @@ Relay: when this creature attacks another creature, adjacent allies gain power e
 
 Requiem Rune: when a creature with this mod dies, deal 2 damage to the boss.
 
+Flank Rune: at the end of each round, the creatures immediately to the left and right gain +1 power.
+
 
 Order: can only be played if you control an untired creature; when played, all your creatures become tired.
 

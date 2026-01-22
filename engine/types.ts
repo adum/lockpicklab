@@ -73,6 +73,12 @@ export interface EndBuffEffect {
   applies_to: "untired";
 }
 
+export interface EndAdjacentBuffEffect {
+  type: "end_adjacent_buff";
+  stat: "power";
+  amount: number;
+}
+
 export interface GrantKeywordEffect {
   type: "grant_keyword";
   keyword: Keyword;
@@ -95,6 +101,7 @@ export type EffectDefinition =
   | BuffEffect
   | AuraEffect
   | EndBuffEffect
+  | EndAdjacentBuffEffect
   | GrantKeywordEffect
   | ShieldEffect;
 
