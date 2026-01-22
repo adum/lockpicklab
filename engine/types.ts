@@ -30,6 +30,11 @@ export interface DeathDamageBossEffect {
   amount: number;
 }
 
+export interface DeathDamageAllEnemiesEffect {
+  type: "death_damage_all_enemies";
+  amount: number;
+}
+
 export interface PoisonAlliesEffect {
   type: "poison_allies";
   amount: number;
@@ -93,6 +98,7 @@ export type EffectDefinition =
   | DamageEffect
   | DamageAllEffect
   | DeathDamageBossEffect
+  | DeathDamageAllEnemiesEffect
   | PoisonAlliesEffect
   | GrantKeywordAlliesEffect
   | RequiresReadyAllyEffect

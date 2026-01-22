@@ -146,6 +146,16 @@
       "keywords": ["guard"]
     },
     {
+      "id": "gravecaller",
+      "name": "Gravecaller",
+      "type": "creature",
+      "cost": 3,
+      "stats": {"power": 2},
+      "effects": [
+        {"type": "death_damage_all_enemies", "amount": 2}
+      ]
+    },
+    {
       "id": "spider",
       "name": "Spider",
       "type": "creature",

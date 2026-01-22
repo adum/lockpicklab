@@ -88,6 +88,8 @@ Requiem Rune: when a creature with this mod dies, deal 2 damage to the boss.
 
 Flank Rune: at the end of each round, the creatures immediately to the left and right gain +1 power.
 
+Gravecaller: when this creature dies, it deals 2 damage to all enemy creatures.
+
 
 Order: can only be played if you control an untired creature; when played, all your creatures become tired.
 

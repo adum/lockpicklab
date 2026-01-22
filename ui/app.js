@@ -135,6 +135,14 @@ const fallbackCards = {
       keywords: ["guard"],
     },
     {
+      id: "gravecaller",
+      name: "Gravecaller",
+      type: "creature",
+      cost: 3,
+      stats: { power: 2 },
+      effects: [{ type: "death_damage_all_enemies", amount: 2 }],
+    },
+    {
       id: "spider",
       name: "Spider",
       type: "creature",
@@ -215,7 +223,7 @@ const defaultPuzzle = {
     hand: [
       "cultist",
       "lancer",
-      "broodmother",
+      "gravecaller",
       "flank_rune",
       "relay_spearman",
       "behemoth",
@@ -2860,6 +2868,10 @@ function formatCardDescription(def) {
     }
     if (effect.type === "death_damage_boss") {
       parts.push(`On death: deal ${effect.amount} dmg to boss`);
+      return;
+    }
+    if (effect.type === "death_damage_all_enemies") {
+      parts.push(`On death: deal ${effect.amount} dmg to enemy creatures`);
       return;
     }
     if (effect.type === "buff") {

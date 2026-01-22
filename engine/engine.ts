@@ -198,10 +198,16 @@ function rebuildBoardWithRebirth(
   board: CardInstance[],
   prefix: "p" | "o",
   cards: CardLibrary
-): { board: CardInstance[]; deaths: number; deathDamage: number } {
+): {
+  board: CardInstance[];
+  deaths: number;
+  deathDamage: number;
+  deathEnemyDamage: number[];
+} {
   const nextBoard: CardInstance[] = [];
   let deaths = 0;
   let deathDamage = 0;
+  const deathEnemyDamage: number[] = [];
   board.forEach((minion) => {
     if (!isCreatureInstance(minion, cards)) {
       nextBoard.push(minion);
@@ -213,8 +219,12 @@ function rebuildBoardWithRebirth(
     }
     deaths += 1;
     deathDamage += getDeathDamageFromMods(minion, cards);
+    const def = cards.byId[minion.card];
+    const deathSplash = getDeathDamageAllEnemiesFromDef(def);
+    if (deathSplash > 0) {
+      deathEnemyDamage.push(deathSplash);
+    }
     if (hasKeyword(minion, REBIRTH)) {
-      const def = cards.byId[minion.card];
       if (def && def.type === "creature") {
         const rebirths = (minion.rebirths ?? 0) + 1;
         const basePower = def.stats?.power ?? 1;
@@ -232,7 +242,7 @@ function rebuildBoardWithRebirth(
       }
     }
   });
-  return { board: nextBoard, deaths, deathDamage };
+  return { board: nextBoard, deaths, deathDamage, deathEnemyDamage };
 }
 
 function handleDeaths(state: GameState, cards: CardLibrary): void {
@@ -258,7 +268,89 @@ function handleDeaths(state: GameState, cards: CardLibrary): void {
   if (deathDamage > 0) {
     applyDamageToOpponent(state, deathDamage);
   }
+  const appliedEnemyDamage =
+    applyDeathDamageToEnemyBoard(
+      state,
+      state.opponent.board,
+      "o",
+      playerResult.deathEnemyDamage,
+      cards
+    ) ||
+    applyDeathDamageToEnemyBoard(
+      state,
+      state.player.board,
+      "p",
+      opponentResult.deathEnemyDamage,
+      cards
+    );
+  if (appliedEnemyDamage) {
+    handleDeaths(state, cards);
+  }
   applyScavengerBuffs(state, cards, deathCount);
+}
+
+function getDeathDamageAllEnemiesFromDef(def?: CardDefinition): number {
+  if (!def?.effects) {
+    return 0;
+  }
+  return def.effects.reduce((total, effect) => {
+    if (effect.type === "death_damage_all_enemies") {
+      return total + effect.amount;
+    }
+    return total;
+  }, 0);
+}
+
+function snapshotCreatureUids(
+  board: CardInstance[],
+  cards: CardLibrary
+): string[] {
+  return board
+    .filter((minion) => isCreatureInstance(minion, cards))
+    .map((minion) => minion.uid)
+    .filter((uid): uid is string => Boolean(uid));
+}
+
+function findCreatureIndexByUid(
+  board: CardInstance[],
+  uid: string
+): number {
+  for (let i = 0; i < board.length; i += 1) {
+    if (board[i]?.uid === uid) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function applyDeathDamageToEnemyBoard(
+  state: GameState,
+  board: CardInstance[],
+  prefix: "p" | "o",
+  events: number[],
+  cards: CardLibrary
+): boolean {
+  if (!events || events.length === 0) {
+    return false;
+  }
+  let applied = false;
+  events.forEach((amount) => {
+    if (amount <= 0) {
+      return;
+    }
+    const targets = snapshotCreatureUids(board, cards);
+    if (targets.length === 0) {
+      return;
+    }
+    applied = true;
+    targets.forEach((uid) => {
+      const index = findCreatureIndexByUid(board, uid);
+      if (index >= 0) {
+        applyDamageToMinionWithSpawn(state, board, index, amount, prefix, cards);
+      }
+    });
+  });
+  return applied;
 }
 
 function applyDamageToMinion(minion: CardInstance, amount: number): void {

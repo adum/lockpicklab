@@ -60,6 +60,9 @@ function formatEffects(card) {
       if (effect.type === "death_damage_boss") {
         return `On death: deal ${effect.amount} damage to boss`;
       }
+      if (effect.type === "death_damage_all_enemies") {
+        return `On death: deal ${effect.amount} damage to enemy creatures`;
+      }
       if (effect.type === "buff") {
         if (effect.amount < 0) {
           return `Lose ${Math.abs(effect.amount)} power`;
