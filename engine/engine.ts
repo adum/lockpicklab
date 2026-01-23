@@ -424,6 +424,30 @@ function spawnBroodling(
   board.splice(insertIndex, 0, instance);
 }
 
+function summonBroodlingAtEnd(
+  state: GameState,
+  board: CardInstance[],
+  prefix: "p" | "o",
+  cards: CardLibrary
+): void {
+  const def = cards.byId[BROODLING_ID];
+  if (!def || def.type !== "creature") {
+    return;
+  }
+  const instance: CardInstance = {
+    uid: allocateUid(state, prefix),
+    card: def.id,
+    power: def.stats?.power ?? 1,
+    keywords: def.keywords ? [...def.keywords] : [],
+    mods: [],
+    tired: false,
+    poison: 0,
+    shield: 0,
+    rebirths: 0,
+  };
+  board.push(instance);
+}
+
 function findNextCreatureIndex(
   board: CardInstance[],
   index: number,
@@ -595,6 +619,15 @@ function applyPlay(state: GameState, action: PlayAction, cards: CardLibrary): Ga
         }
       });
     }
+    const summonEffect = def.effects?.find(
+      (effect) => effect.type === "summon_enemy_broodling"
+    );
+    if (summonEffect && summonEffect.type === "summon_enemy_broodling") {
+      const count = Math.max(1, summonEffect.amount ?? 1);
+      for (let i = 0; i < count; i += 1) {
+        summonBroodlingAtEnd(state, state.opponent.board, "o", cards);
+      }
+    }
   } else if (def.type === "spell") {
     applySpellEffects(state, def.effects ?? [], action.target, cards);
   } else if (def.type === "effect") {
@@ -678,6 +711,9 @@ function applySpellEffects(
     if (effect.type === "poison_allies") {
       applySpellPoisonAllies(state, effect.amount, cards);
     }
+    if (effect.type === "purge_mods") {
+      applySpellPurgeMods(state, target, cards);
+    }
     if (effect.type === "grant_keyword_allies") {
       applySpellGrantKeywordAllies(state, effect.keyword, cards);
     }
@@ -742,6 +778,78 @@ function applySpellPoisonAllies(
       applyPoisonToMinion(minion, amount);
     }
   });
+}
+
+function applySpellPurgeMods(
+  state: GameState,
+  target: string | undefined,
+  cards: CardLibrary
+): void {
+  if (!target) {
+    throw new Error("Purge mods requires a target");
+  }
+  const instance = resolveTargetCreature(state, target, cards);
+  if (!instance) {
+    throw new Error(`Invalid purge target: ${target}`);
+  }
+  if (!instance.mods || instance.mods.length === 0) {
+    return;
+  }
+  let powerDelta = 0;
+  let shieldDelta = 0;
+  instance.mods.forEach((modId) => {
+    const modDef = cards.byId[modId];
+    if (!modDef?.effects) {
+      return;
+    }
+    modDef.effects.forEach((effect) => {
+      if (effect.type === "buff" && effect.stat === "power") {
+        powerDelta += effect.amount;
+      }
+      if (effect.type === "shield") {
+        shieldDelta += effect.amount ?? 1;
+      }
+    });
+  });
+  const def = cards.byId[instance.card];
+  if (def && def.type === "creature") {
+    instance.keywords = def.keywords ? [...def.keywords] : [];
+  }
+  instance.mods = [];
+  if (powerDelta !== 0) {
+    instance.power -= powerDelta;
+  }
+  if (shieldDelta > 0) {
+    instance.shield = Math.max(0, (instance.shield ?? 0) - shieldDelta);
+  } else {
+    instance.shield = instance.shield ?? 0;
+  }
+}
+
+function resolveTargetCreature(
+  state: GameState,
+  target: string,
+  cards: CardLibrary
+): CardInstance | null {
+  if (target.startsWith("player:slot")) {
+    const index = findPlayerIndexByRef(state, target);
+    const unit = state.player.board[index];
+    return unit && isCreatureInstance(unit, cards) ? unit : null;
+  }
+  if (target.startsWith("opponent:slot")) {
+    const index = findOpponentIndexByRef(state, target);
+    const unit = state.opponent.board[index];
+    return unit && isCreatureInstance(unit, cards) ? unit : null;
+  }
+  const playerUnit = state.player.board.find((unit) => unit.uid === target);
+  if (playerUnit && isCreatureInstance(playerUnit, cards)) {
+    return playerUnit;
+  }
+  const opponentUnit = state.opponent.board.find((unit) => unit.uid === target);
+  if (opponentUnit && isCreatureInstance(opponentUnit, cards)) {
+    return opponentUnit;
+  }
+  return null;
 }
 
 function applySpellGrantKeywordAllies(
@@ -960,6 +1068,27 @@ export function getLegalActions(state: GameState, cards: CardLibrary): Action[] 
           }
           actions.push({ type: "play", card: cardId, target: `opponent:slot${idx}` });
         });
+        continue;
+      }
+      const hasPurge = def.effects?.some((effect) => effect.type === "purge_mods") ?? false;
+      if (hasPurge) {
+        const playerTargets = state.player.board
+          .map((minion, idx) => ({ minion, idx }))
+          .filter((entry) => isCreatureInstance(entry.minion, cards))
+          .map((entry) => `player:slot${entry.idx}`);
+        const opponentTargets = state.opponent.board
+          .map((minion, idx) => ({ minion, idx }))
+          .filter((entry) => isCreatureInstance(entry.minion, cards))
+          .map((entry) => `opponent:slot${entry.idx}`);
+        if (playerTargets.length === 0 && opponentTargets.length === 0) {
+          continue;
+        }
+        playerTargets.forEach((target) =>
+          actions.push({ type: "play", card: cardId, target })
+        );
+        opponentTargets.forEach((target) =>
+          actions.push({ type: "play", card: cardId, target })
+        );
         continue;
       }
     }

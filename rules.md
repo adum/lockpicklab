@@ -50,6 +50,10 @@ Blightwave: deal 2 damage to all creatures on both sides.
 
 Toxic Mist: give all your creatures Venom.
 
+Cleanse: remove all mods from a creature.
+
+Brood Herald: when played, it summons a Broodling for the boss.
+
 
 
 Effects stay on the battlefield indefinitely. For example, a War Banner effect gives all player creatures +1 power while attacking.

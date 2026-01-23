@@ -120,6 +120,13 @@ const fallbackCards = {
       effects: [{ type: "damage_all", amount: 2 }],
     },
     {
+      id: "cleanse",
+      name: "Cleanse",
+      type: "spell",
+      cost: 2,
+      effects: [{ type: "purge_mods" }],
+    },
+    {
       id: "toxic_mist",
       name: "Toxic Mist",
       type: "spell",
@@ -141,6 +148,14 @@ const fallbackCards = {
       cost: 3,
       stats: { power: 2 },
       effects: [{ type: "death_damage_all_enemies", amount: 2 }],
+    },
+    {
+      id: "brood_herald",
+      name: "Brood Herald",
+      type: "creature",
+      cost: 2,
+      stats: { power: 4 },
+      effects: [{ type: "summon_enemy_broodling", amount: 1 }],
     },
     {
       id: "spider",
@@ -225,7 +240,7 @@ const defaultPuzzle = {
       "lancer",
       "gravecaller",
       "flank_rune",
-      "relay_spearman",
+      "brood_herald",
       "behemoth",
     ],
     board: [],
@@ -2973,6 +2988,14 @@ function formatCardDescription(def) {
     }
     if (effect.type === "death_damage_all_enemies") {
       parts.push(`On death: deal ${effect.amount} dmg to enemy creatures`);
+      return;
+    }
+    if (effect.type === "purge_mods") {
+      parts.push("Remove all mods from a creature");
+      return;
+    }
+    if (effect.type === "summon_enemy_broodling") {
+      parts.push("On play: summon a Broodling for the boss");
       return;
     }
     if (effect.type === "buff") {

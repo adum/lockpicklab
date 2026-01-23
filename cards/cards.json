@@ -129,6 +129,15 @@
       ]
     },
     {
+      "id": "cleanse",
+      "name": "Cleanse",
+      "type": "spell",
+      "cost": 2,
+      "effects": [
+        {"type": "purge_mods"}
+      ]
+    },
+    {
       "id": "toxic_mist",
       "name": "Toxic Mist",
       "type": "spell",
@@ -153,6 +162,16 @@
       "stats": {"power": 2},
       "effects": [
         {"type": "death_damage_all_enemies", "amount": 2}
+      ]
+    },
+    {
+      "id": "brood_herald",
+      "name": "Brood Herald",
+      "type": "creature",
+      "cost": 2,
+      "stats": {"power": 4},
+      "effects": [
+        {"type": "summon_enemy_broodling", "amount": 1}
       ]
     },
     {

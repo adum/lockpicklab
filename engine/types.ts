@@ -40,6 +40,15 @@ export interface PoisonAlliesEffect {
   amount: number;
 }
 
+export interface PurgeModsEffect {
+  type: "purge_mods";
+}
+
+export interface SummonEnemyBroodlingEffect {
+  type: "summon_enemy_broodling";
+  amount?: number;
+}
+
 export interface GrantKeywordAlliesEffect {
   type: "grant_keyword_allies";
   keyword: Keyword;
@@ -100,6 +109,8 @@ export type EffectDefinition =
   | DeathDamageBossEffect
   | DeathDamageAllEnemiesEffect
   | PoisonAlliesEffect
+  | PurgeModsEffect
+  | SummonEnemyBroodlingEffect
   | GrantKeywordAlliesEffect
   | RequiresReadyAllyEffect
   | PlayTireAlliesEffect
