@@ -98,6 +98,17 @@ function formatEffects(card) {
       if (effect.type === "summon_enemy_broodling") {
         return "On play: summon a Broodling for the boss";
       }
+      if (effect.type === "end_clone_boss_on_mass_death") {
+        return `End of round: if ${effect.amount}+ creatures died, copy the strongest boss creature`;
+      }
+      if (effect.type === "death_counter") {
+        const amount = effect.amount ?? 1;
+        return `Gain ${amount} counter${amount === 1 ? "" : "s"} whenever a creature dies`;
+      }
+      if (effect.type === "activate_damage") {
+        const threshold = effect.threshold ?? 0;
+        return `Activate at ${threshold} counters: deal ${effect.amount} damage to any target`;
+      }
       if (effect.type === "buff") {
         if (effect.amount < 0) {
           return `Lose ${Math.abs(effect.amount)} power`;

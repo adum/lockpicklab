@@ -49,6 +49,22 @@ export interface SummonEnemyBroodlingEffect {
   amount?: number;
 }
 
+export interface EndCloneBossOnMassDeathEffect {
+  type: "end_clone_boss_on_mass_death";
+  amount: number;
+}
+
+export interface DeathCounterEffect {
+  type: "death_counter";
+  amount?: number;
+}
+
+export interface ActivateDamageEffect {
+  type: "activate_damage";
+  amount: number;
+  threshold: number;
+}
+
 export interface GrantKeywordAlliesEffect {
   type: "grant_keyword_allies";
   keyword: Keyword;
@@ -111,6 +127,9 @@ export type EffectDefinition =
   | PoisonAlliesEffect
   | PurgeModsEffect
   | SummonEnemyBroodlingEffect
+  | EndCloneBossOnMassDeathEffect
+  | DeathCounterEffect
+  | ActivateDamageEffect
   | GrantKeywordAlliesEffect
   | RequiresReadyAllyEffect
   | PlayTireAlliesEffect
@@ -148,6 +167,7 @@ export interface CardInstance {
   poison?: number;
   shield?: number;
   rebirths?: number;
+  counter?: number;
 }
 
 export interface SideState {
@@ -175,6 +195,7 @@ export interface GameState {
   nextUid: number;
   manaPerRound: number;
   targetRounds?: number;
+  roundDeaths?: number;
 }
 
 export type PlayAction = {

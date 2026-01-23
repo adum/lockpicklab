@@ -64,6 +64,23 @@ const fallbackCards = {
       effects: [{ type: "aura", stat: "power", amount: 1, applies_to: "attack" }],
     },
     {
+      id: "bone_requiem",
+      name: "Bone Requiem",
+      type: "effect",
+      cost: 3,
+      effects: [{ type: "end_clone_boss_on_mass_death", amount: 4 }],
+    },
+    {
+      id: "death_ward",
+      name: "Death Ward",
+      type: "effect",
+      cost: 3,
+      effects: [
+        { type: "death_counter", amount: 1 },
+        { type: "activate_damage", amount: 3, threshold: 5 },
+      ],
+    },
+    {
       id: "vigil_banner",
       name: "Vigil Banner",
       type: "effect",
@@ -238,8 +255,8 @@ const defaultPuzzle = {
     hand: [
       "cultist",
       "lancer",
-      "gravecaller",
-      "flank_rune",
+      "bone_requiem",
+      "death_ward",
       "brood_herald",
       "behemoth",
     ],
@@ -728,6 +745,12 @@ document.addEventListener("pointerdown", (event) => {
     return;
   }
   if (target?.closest?.(".attack-button")) {
+    return;
+  }
+  if (target?.closest?.(".sacrifice-button")) {
+    return;
+  }
+  if (target?.closest?.(".activate-button")) {
     return;
   }
   if (pendingAction.type === "play") {
@@ -2333,6 +2356,22 @@ function getPendingTargets() {
       (action) =>
         action.type === "attack" && action.source === pendingAction.source
     );
+  } else if (pendingAction.type === "activate") {
+    const sourceIndex = currentState.player.board.findIndex(
+      (unit, idx) =>
+        unit.uid === pendingAction.source ||
+        `player:slot${idx}` === pendingAction.source
+    );
+    const unit =
+      sourceIndex >= 0 ? currentState.player.board[sourceIndex] : null;
+    const def = unit ? cardLibrary.byId?.[unit.card] : null;
+    if (!def || def.type !== "effect") {
+      return null;
+    }
+    actions = cachedLegalActions.filter(
+      (action) =>
+        action.type === "activate" && action.source === pendingAction.source
+    );
   } else {
     return null;
   }
@@ -2366,7 +2405,13 @@ function updateBossTarget(pendingTargets) {
     return;
   }
   if (existing) {
-    existing.title = action?.type === "attack" ? "Attack boss" : "Cast on boss";
+    const verb =
+      action?.type === "attack"
+        ? "Attack"
+        : action?.type === "activate"
+        ? "Activate"
+        : "Cast";
+    existing.title = `${verb} boss`;
     bossWrap.onclick = () => {
       const action = pendingTargets.get("opponent");
       if (action) {
@@ -2378,7 +2423,13 @@ function updateBossTarget(pendingTargets) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "target-icon";
-  button.title = action?.type === "attack" ? "Attack boss" : "Cast on boss";
+  const verb =
+    action?.type === "attack"
+      ? "Attack"
+      : action?.type === "activate"
+      ? "Activate"
+      : "Cast";
+  button.title = `${verb} boss`;
   button.innerHTML =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a1 1 0 0 1 1 1v2.1a6 6 0 0 1 5.9 5.9H21a1 1 0 1 1 0 2h-2.1a6 6 0 0 1-5.9 5.9V20a1 1 0 1 1-2 0v-2.1a6 6 0 0 1-5.9-5.9H3a1 1 0 1 1 0-2h2.1a6 6 0 0 1 5.9-5.9V4a1 1 0 0 1 1-1zm0 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" fill="currentColor"/></svg>';
   button.addEventListener("click", (event) => {
@@ -2618,6 +2669,21 @@ function renderBoard(container, list, side, options = {}) {
       poisonTag.dataset.tooltip = KEYWORD_TOOLTIPS.poison;
       keywords.appendChild(poisonTag);
     }
+    if (def?.type === "effect" && unit.counter && unit.counter > 0) {
+      const counterTag = document.createElement("span");
+      counterTag.className = "tag counter";
+      counterTag.textContent = `counter ${unit.counter}`;
+      const activateEffect = def.effects?.find(
+        (effect) => effect.type === "activate_damage"
+      );
+      if (activateEffect && activateEffect.type === "activate_damage") {
+        const threshold = activateEffect.threshold ?? 0;
+        counterTag.dataset.tooltip = `Counters: ${unit.counter}. Activate at ${threshold} to deal ${activateEffect.amount} damage.`;
+      } else {
+        counterTag.dataset.tooltip = `Counters: ${unit.counter}.`;
+      }
+      keywords.appendChild(counterTag);
+    }
 
     card.appendChild(badges);
     card.appendChild(name);
@@ -2747,12 +2813,63 @@ function renderBoard(container, list, side, options = {}) {
       }
     }
 
+    if (side === "player" && def?.type === "effect") {
+      const activateEffect = def.effects?.find(
+        (effect) => effect.type === "activate_damage"
+      );
+      if (activateEffect && activateEffect.type === "activate_damage") {
+        const sourceRef = unit.uid ?? `player:slot${boardIndex}`;
+        const activateActions = cachedLegalActions.filter(
+          (action) => action.type === "activate" && action.source === sourceRef
+        );
+        const actionsRow = document.createElement("div");
+        actionsRow.className = "card-actions";
+
+        const activateButton = document.createElement("button");
+        activateButton.className = "activate-button";
+        activateButton.title = "Activate";
+        activateButton.disabled = activateActions.length === 0;
+        activateButton.innerHTML =
+          '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg>';
+        activateButton.addEventListener("click", (event) => {
+          event.stopPropagation();
+          if (activateActions.length === 0) {
+            setStatus("Not enough counters to activate yet.", "warn");
+            return;
+          }
+          if (activateActions.length === 1) {
+            applyAndRender(activateActions[0]);
+            return;
+          }
+          if (
+            pendingAction &&
+            pendingAction.type === "activate" &&
+            pendingAction.source === sourceRef
+          ) {
+            pendingAction = null;
+          } else {
+            pendingAction = { type: "activate", source: sourceRef };
+          }
+          render();
+        });
+
+        actionsRow.appendChild(activateButton);
+        card.appendChild(actionsRow);
+      }
+    }
+
     if (targetAction) {
       card.classList.add("targetable");
       const targetButton = document.createElement("button");
       targetButton.type = "button";
       targetButton.className = "target-icon";
-      targetButton.title = targetAction.type === "attack" ? "Attack here" : "Cast here";
+      const targetVerb =
+        targetAction.type === "attack"
+          ? "Attack"
+          : targetAction.type === "activate"
+          ? "Activate"
+          : "Cast";
+      targetButton.title = `${targetVerb} here`;
       targetButton.innerHTML =
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a1 1 0 0 1 1 1v2.1a6 6 0 0 1 5.9 5.9H21a1 1 0 1 1 0 2h-2.1a6 6 0 0 1-5.9 5.9V20a1 1 0 1 1-2 0v-2.1a6 6 0 0 1-5.9-5.9H3a1 1 0 1 1 0-2h2.1a6 6 0 0 1 5.9-5.9V4a1 1 0 0 1 1-1zm0 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" fill="currentColor"/></svg>';
       targetButton.addEventListener("click", (event) => {
@@ -2996,6 +3113,26 @@ function formatCardDescription(def) {
     }
     if (effect.type === "summon_enemy_broodling") {
       parts.push("On play: summon a Broodling for the boss");
+      return;
+    }
+    if (effect.type === "end_clone_boss_on_mass_death") {
+      parts.push(
+        `End of round: if ${effect.amount}+ creatures died, copy the strongest boss creature`
+      );
+      return;
+    }
+    if (effect.type === "death_counter") {
+      const amount = effect.amount ?? 1;
+      parts.push(
+        `Gain ${amount} counter${amount === 1 ? "" : "s"} whenever a creature dies`
+      );
+      return;
+    }
+    if (effect.type === "activate_damage") {
+      const threshold = effect.threshold ?? 0;
+      parts.push(
+        `Activate at ${threshold} counters: deal ${effect.amount} dmg to any target`
+      );
       return;
     }
     if (effect.type === "buff") {

@@ -60,6 +60,10 @@ Effects stay on the battlefield indefinitely. For example, a War Banner effect g
 
 Vigil Banner: at the end of each round, your untired creatures gain +1 power.
 
+Bone Requiem: at the end of a round where 4+ creatures died, copy the strongest boss creature to your board.
+
+Death Ward: whenever a creature dies, it gains a counter. At 5 counters, you may activate it to deal 3 damage to any target.
+
 
 
 Mods attach to any creature (player or boss) and permanently modify it, such as granting Pierce or a damage shield.

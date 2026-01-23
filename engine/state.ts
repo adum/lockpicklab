@@ -11,6 +11,7 @@ function cloneInstance(instance: CardInstance): CardInstance {
     poison: instance.poison ?? 0,
     shield: instance.shield ?? 0,
     rebirths: instance.rebirths ?? 0,
+    counter: instance.counter ?? 0,
   };
 }
 
@@ -44,6 +45,7 @@ export function cloneState(state: GameState): GameState {
     nextUid: state.nextUid,
     manaPerRound: state.manaPerRound,
     targetRounds: state.targetRounds,
+    roundDeaths: state.roundDeaths ?? 0,
   };
 }
 
@@ -68,6 +70,7 @@ export function normalizeState(input: {
   nextUid?: number;
   manaPerRound?: number;
   targetRounds?: number;
+  roundDeaths?: number;
 }): GameState {
   const nextUidRef = { value: input.nextUid ?? 1 };
   const player = cloneSide(input.player);
@@ -77,11 +80,13 @@ export function normalizeState(input: {
     unit.poison = unit.poison ?? 0;
     unit.shield = unit.shield ?? 0;
     unit.rebirths = unit.rebirths ?? 0;
+    unit.counter = unit.counter ?? 0;
   });
   opponent.board.forEach((unit) => {
     unit.poison = unit.poison ?? 0;
     unit.shield = unit.shield ?? 0;
     unit.rebirths = unit.rebirths ?? 0;
+    unit.counter = unit.counter ?? 0;
   });
   opponent.poison = opponent.poison ?? 0;
 
@@ -96,5 +101,6 @@ export function normalizeState(input: {
     nextUid: nextUidRef.value,
     manaPerRound: input.manaPerRound ?? 0,
     targetRounds: input.targetRounds,
+    roundDeaths: input.roundDeaths ?? 0,
   };
 }

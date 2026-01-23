@@ -31,6 +31,7 @@ export function cloneState(state) {
     nextUid: state.nextUid,
     manaPerRound: state.manaPerRound,
     targetRounds: state.targetRounds,
+    roundDeaths: state.roundDeaths ?? 0,
   };
 }
 
@@ -66,6 +67,7 @@ function cloneInstance(instance) {
     poison: instance.poison ?? 0,
     shield: instance.shield ?? 0,
     rebirths: instance.rebirths ?? 0,
+    counter: instance.counter ?? 0,
   };
 }
 
@@ -89,11 +91,13 @@ export function normalizeState(input) {
     unit.poison = unit.poison ?? 0;
     unit.shield = unit.shield ?? 0;
     unit.rebirths = unit.rebirths ?? 0;
+    unit.counter = unit.counter ?? 0;
   });
   opponent.board.forEach((unit) => {
     unit.poison = unit.poison ?? 0;
     unit.shield = unit.shield ?? 0;
     unit.rebirths = unit.rebirths ?? 0;
+    unit.counter = unit.counter ?? 0;
   });
   opponent.poison = opponent.poison ?? 0;
 
@@ -105,6 +109,7 @@ export function normalizeState(input) {
     nextUid: nextUidRef.value,
     manaPerRound: input.manaPerRound ?? 0,
     targetRounds: input.targetRounds,
+    roundDeaths: input.roundDeaths ?? 0,
   };
 }
 
@@ -315,6 +320,7 @@ function handleDeaths(state, cards) {
   if (deathCount <= 0) {
     return;
   }
+  state.roundDeaths = (state.roundDeaths ?? 0) + deathCount;
   state.player.board = playerResult.board;
   state.opponent.board = opponentResult.board;
   const deathDamage = playerResult.deathDamage + opponentResult.deathDamage;
@@ -339,7 +345,30 @@ function handleDeaths(state, cards) {
   if (appliedEnemyDamage) {
     handleDeaths(state, cards);
   }
+  applyDeathCounters(state, cards, deathCount);
   applyScavengerBuffs(state, cards, deathCount);
+}
+
+function applyDeathCounters(state, cards, deathCount) {
+  if (deathCount <= 0) {
+    return;
+  }
+  state.player.board.forEach((unit) => {
+    const def = cards.byId[unit.card];
+    if (!def || def.type !== "effect") {
+      return;
+    }
+    const amount = def.effects?.reduce((sum, effect) => {
+      if (effect.type === "death_counter") {
+        return sum + (effect.amount ?? 1);
+      }
+      return sum;
+    }, 0);
+    if (!amount) {
+      return;
+    }
+    unit.counter = (unit.counter ?? 0) + amount * deathCount;
+  });
 }
 
 function getDeathDamageAllEnemiesFromDef(def) {
@@ -561,6 +590,54 @@ function applyEndAdjacentBuffs(state, board, cards) {
   });
 }
 
+function applyEndMassDeathClones(state, cards) {
+  const deaths = state.roundDeaths ?? 0;
+  if (deaths <= 0) {
+    return;
+  }
+  const effectCount = state.player.board.reduce((count, unit) => {
+    const def = cards.byId[unit.card];
+    if (!def || def.type !== "effect") {
+      return count;
+    }
+    const hasTrigger = def.effects?.some(
+      (effect) =>
+        effect.type === "end_clone_boss_on_mass_death" &&
+        deaths >= effect.amount
+    );
+    return hasTrigger ? count + 1 : count;
+  }, 0);
+  if (effectCount <= 0) {
+    return;
+  }
+  const bossCandidates = state.opponent.board.filter((minion) =>
+    isCreatureInstance(minion, cards)
+  );
+  if (bossCandidates.length === 0) {
+    return;
+  }
+  let strongest = bossCandidates[0];
+  bossCandidates.slice(1).forEach((minion) => {
+    if ((minion.power ?? 0) > (strongest.power ?? 0)) {
+      strongest = minion;
+    }
+  });
+  for (let i = 0; i < effectCount; i += 1) {
+    const clone = {
+      uid: allocateUid(state, "p"),
+      card: strongest.card,
+      power: strongest.power,
+      keywords: strongest.keywords ? [...strongest.keywords] : [],
+      mods: strongest.mods ? [...strongest.mods] : [],
+      tired: strongest.tired,
+      poison: strongest.poison ?? 0,
+      shield: strongest.shield ?? 0,
+      rebirths: strongest.rebirths ?? 0,
+    };
+    state.player.board.push(clone);
+  }
+}
+
 export function isWin(state) {
   return state.opponent.health <= 0;
 }
@@ -652,6 +729,7 @@ function applyPlay(state, action, cards) {
       poison: 0,
       shield: 0,
       rebirths: 0,
+      counter: 0,
     };
     state.player.board.push(instance);
   } else if (def.type === "mod") {
@@ -939,6 +1017,49 @@ function applyAttack(state, action, cards) {
   return state;
 }
 
+function applyActivateDamage(state, source, effect, target, cards) {
+  if ((source.counter ?? 0) < effect.threshold) {
+    throw new Error("Not enough counters to activate");
+  }
+  if (!target) {
+    throw new Error("Activate damage requires a target");
+  }
+  if (target === "opponent") {
+    applyDamageToOpponent(state, effect.amount);
+  } else if (target.startsWith("opponent:slot")) {
+    const index = findOpponentIndexByRef(state, target);
+    if (index < 0) {
+      throw new Error(`Invalid activate target: ${target}`);
+    }
+    applyDamageToMinionWithSpawn(
+      state,
+      state.opponent.board,
+      index,
+      effect.amount,
+      "o",
+      cards
+    );
+    handleDeaths(state, cards);
+  } else if (target.startsWith("player:slot")) {
+    const index = findPlayerIndexByRef(state, target);
+    if (index < 0) {
+      throw new Error(`Invalid activate target: ${target}`);
+    }
+    applyDamageToMinionWithSpawn(
+      state,
+      state.player.board,
+      index,
+      effect.amount,
+      "p",
+      cards
+    );
+    handleDeaths(state, cards);
+  } else {
+    throw new Error(`Invalid activate target: ${target}`);
+  }
+  source.counter = (source.counter ?? 0) - effect.threshold;
+}
+
 function applyActivate(state, action, cards) {
   const sourceIndex = findPlayerIndexByRef(state, action.source);
   if (sourceIndex < 0) {
@@ -946,6 +1067,18 @@ function applyActivate(state, action, cards) {
   }
   const source = state.player.board[sourceIndex];
   const def = cards.byId[source.card];
+  if (def && def.type === "effect") {
+    const activateEffect = def.effects?.find(
+      (effect) => effect.type === "activate_damage"
+    );
+    if (activateEffect && activateEffect.type === "activate_damage") {
+      if (!action.target) {
+        throw new Error("Activate requires a target");
+      }
+      applyActivateDamage(state, source, activateEffect, action.target, cards);
+      return state;
+    }
+  }
   if (!def || def.type !== "creature" || !hasKeyword(source, SACRIFICE)) {
     throw new Error("Source has no sacrificial ability");
   }
@@ -988,12 +1121,14 @@ function applyEnd(state, cards) {
   applyEndBuffs(state, cards);
   applyEndAdjacentBuffs(state, state.player.board, cards);
   applyEndAdjacentBuffs(state, state.opponent.board, cards);
+  applyEndMassDeathClones(state, cards);
   state.player.board.forEach((minion) => {
     minion.tired = false;
   });
   state.chainCount = 0;
   state.turn += 1;
   state.player.mana += state.manaPerRound;
+  state.roundDeaths = 0;
   return state;
 }
 
@@ -1153,6 +1288,45 @@ export function getLegalActions(state, cards) {
         actions.push({ type: "activate", source: sourceRef, target: targetRef });
       });
     }
+  });
+
+  state.player.board.forEach((unit, idx) => {
+    const def = cards.byId[unit.card];
+    if (!def || def.type !== "effect") {
+      return;
+    }
+    const activateEffect = def.effects?.find(
+      (effect) => effect.type === "activate_damage"
+    );
+    if (!activateEffect || activateEffect.type !== "activate_damage") {
+      return;
+    }
+    const threshold = activateEffect.threshold ?? 0;
+    if ((unit.counter ?? 0) < threshold) {
+      return;
+    }
+    const sourceRef = unit.uid ?? `player:slot${idx}`;
+    actions.push({ type: "activate", source: sourceRef, target: "opponent" });
+    state.opponent.board.forEach((enemy, enemyIndex) => {
+      if (!isCreatureInstance(enemy, cards)) {
+        return;
+      }
+      actions.push({
+        type: "activate",
+        source: sourceRef,
+        target: `opponent:slot${enemyIndex}`,
+      });
+    });
+    state.player.board.forEach((ally, allyIndex) => {
+      if (!isCreatureInstance(ally, cards)) {
+        return;
+      }
+      actions.push({
+        type: "activate",
+        source: sourceRef,
+        target: `player:slot${allyIndex}`,
+      });
+    });
   });
 
   actions.push({ type: "end" });

@@ -67,6 +67,25 @@
       ]
     },
     {
+      "id": "bone_requiem",
+      "name": "Bone Requiem",
+      "type": "effect",
+      "cost": 3,
+      "effects": [
+        {"type": "end_clone_boss_on_mass_death", "amount": 4}
+      ]
+    },
+    {
+      "id": "death_ward",
+      "name": "Death Ward",
+      "type": "effect",
+      "cost": 3,
+      "effects": [
+        {"type": "death_counter", "amount": 1},
+        {"type": "activate_damage", "amount": 3, "threshold": 5}
+      ]
+    },
+    {
       "id": "vigil_banner",
       "name": "Vigil Banner",
       "type": "effect",
