@@ -412,7 +412,8 @@ function resolveCardArt(def, cardId) {
   const id = def?.id ?? cardId;
   const mapped = id ? artMap[id] : null;
   const auto = id ? `./assets/${folder}/${id}.jpg` : null;
-  return { src: mapped ?? auto ?? fallback, fallback };
+  const useMapped = mapped && mapped !== fallback;
+  return { src: useMapped ? mapped : auto ?? fallback, fallback };
 }
 
 const GENERATOR_PREFS_KEY = "lockpick.generatorPrefs";

@@ -63,7 +63,8 @@ function resolveCardArt(card) {
   const id = card?.id;
   const mapped = id ? artMap[id] : null;
   const auto = id ? `./assets/${folder}/${id}.jpg` : null;
-  return { src: mapped ?? auto ?? fallback, fallback };
+  const useMapped = mapped && mapped !== fallback;
+  return { src: useMapped ? mapped : auto ?? fallback, fallback };
 }
 
 function formatEffects(card) {
