@@ -125,6 +125,21 @@ function formatEffects(card) {
     .join("; ");
 }
 
+function isBossModAllowed(card) {
+  if (!card || card.type !== "mod") {
+    return false;
+  }
+  return !(card.effects ?? []).some((effect) => {
+    if (effect.type === "death_damage_boss") {
+      return true;
+    }
+    if (effect.type === "grant_keyword" && effect.keyword === "pierce") {
+      return true;
+    }
+    return false;
+  });
+}
+
 
 function renderCards(cards) {
   container.innerHTML = "";
@@ -226,6 +241,17 @@ function renderCards(cards) {
           keywords.appendChild(tag);
         });
         handCard.appendChild(keywords);
+      }
+
+      if (card.type === "mod" && isBossModAllowed(card)) {
+        const tags = document.createElement("div");
+        tags.className = "hand-keywords";
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = "boss ok";
+        tag.dataset.tooltip = "Can be granted to boss creatures by the generator.";
+        tags.appendChild(tag);
+        handCard.appendChild(tags);
       }
 
       item.appendChild(handCard);

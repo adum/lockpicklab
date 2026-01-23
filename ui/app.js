@@ -324,6 +324,7 @@ const elements = {
   genManaRound: document.getElementById("gen-mana-round"),
   genBossMin: document.getElementById("gen-boss-min"),
   genBossMax: document.getElementById("gen-boss-max"),
+  genBossMods: document.getElementById("gen-boss-mods"),
   genMaxSolutions: document.getElementById("gen-max-solutions"),
   genActionBudget: document.getElementById("gen-action-budget"),
   genSolverBudget: document.getElementById("gen-solver-budget"),
@@ -738,6 +739,7 @@ elements.genSeedRandom.addEventListener("change", () => {
   elements.genManaRound,
   elements.genBossMin,
   elements.genBossMax,
+  elements.genBossMods,
   elements.genMaxSolutions,
   elements.genActionBudget,
   elements.genSolverBudget,
@@ -832,6 +834,7 @@ function startGenerator() {
   const manaPerRound = parseNumber(elements.genManaRound.value, 0, 0, 10);
   const bossMin = parseNumber(elements.genBossMin?.value ?? 0, 0, 0, 6);
   const bossMax = parseNumber(elements.genBossMax?.value ?? 0, 0, 0, 6);
+  const bossModsMax = parseNumber(elements.genBossMods?.value ?? 0, 0, 0, 4);
   const actionBudget = parseNumber(
     elements.genActionBudget?.value ?? GENERATOR_MAX_GHOST_ACTIONS,
     GENERATOR_MAX_GHOST_ACTIONS,
@@ -872,6 +875,10 @@ function startGenerator() {
   const creaturePool = Object.values(cardLibrary.byId).filter(
     (card) => card.type === "creature"
   );
+  const bossModPool = Object.values(cardLibrary.byId)
+    .filter((card) => card.type === "mod")
+    .filter((card) => isBossModAllowed(card))
+    .map((card) => card.id);
 
   generatorCancel = false;
   generatorRunId += 1;
@@ -887,6 +894,8 @@ function startGenerator() {
     manaPerRound,
     bossMin: bossMinClamped,
     bossMax: bossMaxClamped,
+    bossModsMax,
+    bossModPool,
     bossName,
     actionBudget,
     solverBudget,
@@ -978,7 +987,9 @@ function buildPuzzleAttempt(state, attemptNumber) {
     state.rng,
     state.creaturePool,
     state.bossMin,
-    state.bossMax
+    state.bossMax,
+    state.bossModPool,
+    state.bossModsMax
   );
   if (!bossBoard) {
     return null;
@@ -1497,6 +1508,7 @@ function saveGeneratorPrefs() {
     manaRound: elements.genManaRound?.value ?? "",
     bossMin: elements.genBossMin?.value ?? "",
     bossMax: elements.genBossMax?.value ?? "",
+    bossMods: elements.genBossMods?.value ?? "",
     maxSolutions: elements.genMaxSolutions?.value ?? "",
     actionBudget: elements.genActionBudget?.value ?? "",
     solverBudget: elements.genSolverBudget?.value ?? "",
@@ -1552,6 +1564,9 @@ function loadGeneratorPrefs() {
   if (elements.genBossMax && typeof prefs.bossMax === "string") {
     elements.genBossMax.value = prefs.bossMax;
   }
+  if (elements.genBossMods && typeof prefs.bossMods === "string") {
+    elements.genBossMods.value = prefs.bossMods;
+  }
   if (elements.genMaxSolutions && typeof prefs.maxSolutions === "string") {
     elements.genMaxSolutions.value = prefs.maxSolutions;
   }
@@ -1573,7 +1588,7 @@ function pickHand(rng, pool, count) {
   return hand;
 }
 
-function buildBossBoard(rng, pool, minCount, maxCount) {
+function buildBossBoard(rng, pool, minCount, maxCount, modPool, modsMax) {
   const min = Math.max(0, minCount ?? 0);
   const max = Math.max(min, maxCount ?? 0);
   if (!Array.isArray(pool) || pool.length === 0) {
@@ -1590,15 +1605,84 @@ function buildBossBoard(rng, pool, minCount, maxCount) {
     if (!pick?.stats) {
       continue;
     }
-    board.push({
+    const instance = {
       card: pick.id,
       power: pick.stats.power,
       keywords: pick.keywords ? [...pick.keywords] : [],
       mods: [],
       tired: false,
-    });
+      poison: 0,
+      shield: 0,
+      rebirths: 0,
+    };
+    applyBossMods(instance, rng, modPool, modsMax);
+    board.push(instance);
   }
   return board;
+}
+
+function applyBossMods(instance, rng, modPool, modsMax) {
+  const maxMods = Math.max(0, modsMax ?? 0);
+  if (!Array.isArray(modPool) || modPool.length === 0 || maxMods <= 0) {
+    return;
+  }
+  const cap = Math.min(maxMods, modPool.length);
+  const count = rng.int(cap + 1);
+  if (count <= 0) {
+    return;
+  }
+  const available = [...modPool];
+  for (let i = 0; i < count; i += 1) {
+    if (available.length === 0) {
+      break;
+    }
+    const pick = rng.pick(available);
+    const index = available.indexOf(pick);
+    if (index >= 0) {
+      available.splice(index, 1);
+    }
+    const def = cardLibrary.byId?.[pick];
+    if (!def || def.type !== "mod") {
+      continue;
+    }
+    applyModEffects(instance, def);
+  }
+}
+
+function applyModEffects(target, def) {
+  const effects = def.effects ?? [];
+  effects.forEach((effect) => {
+    if (effect.type === "buff") {
+      if (effect.stat === "power") {
+        target.power += effect.amount;
+      }
+    }
+    if (effect.type === "shield") {
+      target.shield = (target.shield ?? 0) + (effect.amount ?? 1);
+    }
+    if (effect.type === "grant_keyword") {
+      if (!target.keywords.includes(effect.keyword)) {
+        target.keywords.push(effect.keyword);
+      }
+    }
+  });
+  target.mods = target.mods ?? [];
+  target.mods.push(def.id);
+}
+
+function isBossModAllowed(card) {
+  if (!card || card.type !== "mod") {
+    return false;
+  }
+  return !(card.effects ?? []).some((effect) => {
+    if (effect.type === "death_damage_boss") {
+      return true;
+    }
+    if (effect.type === "grant_keyword" && effect.keyword === "pierce") {
+      return true;
+    }
+    return false;
+  });
 }
 
 function ghostWalk(startState, rng, targetRounds, maxActions) {
