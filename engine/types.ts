@@ -54,6 +54,35 @@ export interface EndCloneBossOnMassDeathEffect {
   amount: number;
 }
 
+export interface BorrowEnemyEffect {
+  type: "borrow_enemy";
+  return_multiplier?: number;
+}
+
+export interface SwapPositionsEffect {
+  type: "swap_positions";
+}
+
+export interface DeathHealBossEffect {
+  type: "death_heal_boss";
+  amount: number;
+}
+
+export interface ManaOnModEffect {
+  type: "mana_on_mod";
+  amount: number;
+}
+
+export interface EndManaEffect {
+  type: "end_mana";
+  amount: number;
+}
+
+export interface CastCounterEffect {
+  type: "cast_counter";
+  amount?: number;
+}
+
 export interface DeathCounterEffect {
   type: "death_counter";
   amount?: number;
@@ -63,6 +92,10 @@ export interface ActivateDamageEffect {
   type: "activate_damage";
   amount: number;
   threshold: number;
+}
+
+export interface ActivateManaEffect {
+  type: "activate_mana";
 }
 
 export interface GrantKeywordAlliesEffect {
@@ -128,8 +161,15 @@ export type EffectDefinition =
   | PurgeModsEffect
   | SummonEnemyBroodlingEffect
   | EndCloneBossOnMassDeathEffect
+  | BorrowEnemyEffect
+  | SwapPositionsEffect
+  | DeathHealBossEffect
+  | ManaOnModEffect
+  | EndManaEffect
+  | CastCounterEffect
   | DeathCounterEffect
   | ActivateDamageEffect
+  | ActivateManaEffect
   | GrantKeywordAlliesEffect
   | RequiresReadyAllyEffect
   | PlayTireAlliesEffect
@@ -168,6 +208,8 @@ export interface CardInstance {
   shield?: number;
   rebirths?: number;
   counter?: number;
+  borrowed?: boolean;
+  borrowedMultiplier?: number;
 }
 
 export interface SideState {

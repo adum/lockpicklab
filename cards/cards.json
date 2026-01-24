@@ -21,6 +21,16 @@
       ]
     },
     {
+      "id": "blood_pact",
+      "name": "Blood Pact",
+      "type": "mod",
+      "cost": 2,
+      "effects": [
+        {"type": "buff", "stat": "power", "amount": 3},
+        {"type": "death_heal_boss", "amount": 3}
+      ]
+    },
+    {
       "id": "testudo_rune",
       "name": "Testudo Rune",
       "type": "mod",
@@ -67,6 +77,16 @@
       ]
     },
     {
+      "id": "debt_ledger",
+      "name": "Debt Ledger",
+      "type": "effect",
+      "cost": 1,
+      "effects": [
+        {"type": "mana_on_mod", "amount": 1},
+        {"type": "end_mana", "amount": -2}
+      ]
+    },
+    {
       "id": "bone_requiem",
       "name": "Bone Requiem",
       "type": "effect",
@@ -83,6 +103,16 @@
       "effects": [
         {"type": "death_counter", "amount": 1},
         {"type": "activate_damage", "amount": 3, "threshold": 5}
+      ]
+    },
+    {
+      "id": "arcane_reservoir",
+      "name": "Arcane Reservoir",
+      "type": "effect",
+      "cost": 2,
+      "effects": [
+        {"type": "cast_counter", "amount": 1},
+        {"type": "activate_mana"}
       ]
     },
     {
@@ -154,6 +184,24 @@
       "cost": 2,
       "effects": [
         {"type": "purge_mods"}
+      ]
+    },
+    {
+      "id": "turncoat",
+      "name": "Turncoat",
+      "type": "spell",
+      "cost": 3,
+      "effects": [
+        {"type": "borrow_enemy", "return_multiplier": 2}
+      ]
+    },
+    {
+      "id": "swap_step",
+      "name": "Swap Step",
+      "type": "spell",
+      "cost": 2,
+      "effects": [
+        {"type": "swap_positions"}
       ]
     },
     {

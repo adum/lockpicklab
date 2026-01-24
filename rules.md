@@ -54,6 +54,10 @@ Cleanse: remove all mods from a creature.
 
 Brood Herald: when played, it summons a Broodling for the boss.
 
+Turncoat: move a boss creature to your board this round; at end of round it returns to the boss with double power.
+
+Swap Step: swap two creatures on the same board; both become tired.
+
 
 
 Effects stay on the battlefield indefinitely. For example, a War Banner effect gives all player creatures +1 power while attacking.
@@ -64,11 +68,17 @@ Bone Requiem: at the end of a round where 4+ creatures died, copy the strongest 
 
 Death Ward: whenever a creature dies, it gains a counter. At 5 counters, you may activate it to deal 3 damage to any target.
 
+Arcane Reservoir: whenever you cast a spell or mod, it gains a counter. You may activate it to gain mana equal to its counters, then destroy it.
+
+Debt Ledger: when you play a mod, gain 1 mana. At end of round, lose 2 mana.
+
 
 
 Mods attach to any creature (player or boss) and permanently modify it, such as granting Pierce or a damage shield.
 
 Wooden Shield: reduces the creature's power by 1, then blocks the next damage it would take and breaks.
+
+Blood Pact: gives +3 power. When the creature dies, the boss heals 3.
 
 
 Testudo: if a creature with Testudo has friendly creatures on both sides of it on the board, it takes no combat damage (attacking or defending).

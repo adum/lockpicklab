@@ -3,6 +3,54 @@ import { KEYWORD_TOOLTIPS, formatKeyword } from "./keywords.js";
 
 const container = document.getElementById("cards-container");
 const searchInput = document.getElementById("card-search");
+const previewModal = document.createElement("div");
+
+previewModal.className = "card-modal";
+previewModal.setAttribute("aria-hidden", "true");
+previewModal.innerHTML = `
+  <div class="card-modal-backdrop"></div>
+  <div class="card-modal-content" role="dialog" aria-modal="true">
+    <button class="card-modal-close" type="button" aria-label="Close preview">×</button>
+    <img class="card-modal-image" alt="" />
+  </div>
+`;
+document.body.appendChild(previewModal);
+
+const previewImage = previewModal.querySelector(".card-modal-image");
+const previewClose = previewModal.querySelector(".card-modal-close");
+const previewBackdrop = previewModal.querySelector(".card-modal-backdrop");
+
+function openPreview(src, fallback, label) {
+  if (!previewImage) {
+    return;
+  }
+  previewImage.src = src;
+  previewImage.alt = `${label} art`;
+  if (fallback && fallback !== src) {
+    previewImage.onerror = () => {
+      if (previewImage.src !== fallback) {
+        previewImage.src = fallback;
+      }
+    };
+  } else {
+    previewImage.onerror = null;
+  }
+  previewModal.classList.add("open");
+  previewModal.setAttribute("aria-hidden", "false");
+}
+
+function closePreview() {
+  previewModal.classList.remove("open");
+  previewModal.setAttribute("aria-hidden", "true");
+}
+
+previewClose?.addEventListener("click", closePreview);
+previewBackdrop?.addEventListener("click", closePreview);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closePreview();
+  }
+});
 
 const CREATURE_ART = {
   cultist: "./assets/creatures/cultist.jpg",
@@ -86,8 +134,17 @@ function formatEffects(card) {
       if (effect.type === "poison_allies") {
         return `Give your creatures ${effect.amount} poison`;
       }
+      if (effect.type === "borrow_enemy") {
+        return "Borrow a boss creature this round; it returns at end with double power";
+      }
+      if (effect.type === "swap_positions") {
+        return "Swap two creatures on the same board. Both become tired";
+      }
       if (effect.type === "death_damage_boss") {
         return `On death: deal ${effect.amount} damage to boss`;
+      }
+      if (effect.type === "death_heal_boss") {
+        return `On death: boss heals ${effect.amount}`;
       }
       if (effect.type === "death_damage_all_enemies") {
         return `On death: deal ${effect.amount} damage to enemy creatures`;
@@ -101,6 +158,10 @@ function formatEffects(card) {
       if (effect.type === "end_clone_boss_on_mass_death") {
         return `End of round: if ${effect.amount}+ creatures died, copy the strongest boss creature`;
       }
+      if (effect.type === "cast_counter") {
+        const amount = effect.amount ?? 1;
+        return `Gain ${amount} counter${amount === 1 ? "" : "s"} whenever you cast a spell or mod`;
+      }
       if (effect.type === "death_counter") {
         const amount = effect.amount ?? 1;
         return `Gain ${amount} counter${amount === 1 ? "" : "s"} whenever a creature dies`;
@@ -108,6 +169,18 @@ function formatEffects(card) {
       if (effect.type === "activate_damage") {
         const threshold = effect.threshold ?? 0;
         return `Activate at ${threshold} counters: deal ${effect.amount} damage to any target`;
+      }
+      if (effect.type === "activate_mana") {
+        return "Activate: gain mana equal to counters, then destroy this";
+      }
+      if (effect.type === "mana_on_mod") {
+        return `Gain ${effect.amount} mana when you play a mod`;
+      }
+      if (effect.type === "end_mana") {
+        if (effect.amount < 0) {
+          return `End of round: lose ${Math.abs(effect.amount)} mana`;
+        }
+        return `End of round: gain ${effect.amount} mana`;
       }
       if (effect.type === "buff") {
         if (effect.amount < 0) {
@@ -191,6 +264,8 @@ function renderCards(cards) {
       const handCard = document.createElement("div");
       handCard.className = `hand-card type-${card.type ?? "creature"}`;
 
+      let previewSrc = null;
+      let previewFallback = null;
       if (
         card.type === "creature" ||
         card.type === "spell" ||
@@ -198,6 +273,8 @@ function renderCards(cards) {
         card.type === "mod"
       ) {
         const { src: artSrc, fallback: artFallback } = resolveCardArt(card);
+        previewSrc = artSrc;
+        previewFallback = artFallback;
         if (artSrc) {
           const artWrap = document.createElement("div");
           artWrap.className = "hand-art";
@@ -272,6 +349,12 @@ function renderCards(cards) {
       }
 
       item.appendChild(handCard);
+      handCard.addEventListener("click", () => {
+        const label = card.name ?? card.id ?? "card";
+        if (previewSrc) {
+          openPreview(previewSrc, previewFallback, label);
+        }
+      });
       listWrap.appendChild(item);
     });
 

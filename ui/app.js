@@ -26,6 +26,16 @@ const fallbackCards = {
       effects: [{ type: "grant_keyword", keyword: "pierce" }],
     },
     {
+      id: "blood_pact",
+      name: "Blood Pact",
+      type: "mod",
+      cost: 2,
+      effects: [
+        { type: "buff", stat: "power", amount: 3 },
+        { type: "death_heal_boss", amount: 3 },
+      ],
+    },
+    {
       id: "testudo_rune",
       name: "Testudo Rune",
       type: "mod",
@@ -64,6 +74,16 @@ const fallbackCards = {
       effects: [{ type: "aura", stat: "power", amount: 1, applies_to: "attack" }],
     },
     {
+      id: "debt_ledger",
+      name: "Debt Ledger",
+      type: "effect",
+      cost: 1,
+      effects: [
+        { type: "mana_on_mod", amount: 1 },
+        { type: "end_mana", amount: -2 },
+      ],
+    },
+    {
       id: "bone_requiem",
       name: "Bone Requiem",
       type: "effect",
@@ -78,6 +98,16 @@ const fallbackCards = {
       effects: [
         { type: "death_counter", amount: 1 },
         { type: "activate_damage", amount: 3, threshold: 5 },
+      ],
+    },
+    {
+      id: "arcane_reservoir",
+      name: "Arcane Reservoir",
+      type: "effect",
+      cost: 2,
+      effects: [
+        { type: "cast_counter", amount: 1 },
+        { type: "activate_mana" },
       ],
     },
     {
@@ -142,6 +172,20 @@ const fallbackCards = {
       type: "spell",
       cost: 2,
       effects: [{ type: "purge_mods" }],
+    },
+    {
+      id: "turncoat",
+      name: "Turncoat",
+      type: "spell",
+      cost: 3,
+      effects: [{ type: "borrow_enemy", return_multiplier: 2 }],
+    },
+    {
+      id: "swap_step",
+      name: "Swap Step",
+      type: "spell",
+      cost: 2,
+      effects: [{ type: "swap_positions" }],
     },
     {
       id: "toxic_mist",
@@ -251,14 +295,14 @@ const defaultPuzzle = {
   targetRounds: 2,
   manaPerRound: 2,
   player: {
-    mana: 5,
+    mana: 15,
     hand: [
       "cultist",
       "lancer",
-      "bone_requiem",
-      "death_ward",
       "brood_herald",
-      "behemoth",
+      "blood_pact",
+      "swap_step",
+      "debt_ledger",
     ],
     board: [],
   },
@@ -2348,6 +2392,9 @@ function getPendingTargets() {
   }
   let actions = [];
   if (pendingAction.type === "play") {
+    if (pendingAction.swap) {
+      return null;
+    }
     actions = cachedLegalActions.filter(
       (action) => action.type === "play" && action.card === pendingAction.card
     );
@@ -2489,12 +2536,27 @@ function renderLog() {
 
 function formatAction(action, state) {
   switch (action.type) {
-    case "play":
+    case "play": {
+      if (action.target && action.target.includes("|")) {
+        const [first, second] = action.target.split("|");
+        const left = describeRef(first, state);
+        const right = describeRef(second, state);
+        const prefix =
+          first.startsWith("player:") && second.startsWith("player:")
+            ? "your "
+            : first.startsWith("opponent:") && second.startsWith("opponent:")
+            ? "boss "
+            : "";
+        return `Play ${action.card} -> ${prefix}${left} ↔ ${prefix}${right}`;
+      }
       return `Play ${action.card}${action.target ? " -> " + describeRef(action.target, state) : ""}`;
+    }
     case "attack":
       return `Attack ${describeRef(action.source, state)} -> ${describeRef(action.target, state)}`;
     case "activate":
-      return `Activate ${describeRef(action.source, state)} -> ${describeRef(action.target, state)}`;
+      return action.target
+        ? `Activate ${describeRef(action.source, state)} -> ${describeRef(action.target, state)}`
+        : `Activate ${describeRef(action.source, state)}`;
     case "end":
       return "End round";
     default:
@@ -2673,12 +2735,17 @@ function renderBoard(container, list, side, options = {}) {
       const counterTag = document.createElement("span");
       counterTag.className = "tag counter";
       counterTag.textContent = `counter ${unit.counter}`;
-      const activateEffect = def.effects?.find(
+      const activateDamage = def.effects?.find(
         (effect) => effect.type === "activate_damage"
       );
-      if (activateEffect && activateEffect.type === "activate_damage") {
-        const threshold = activateEffect.threshold ?? 0;
-        counterTag.dataset.tooltip = `Counters: ${unit.counter}. Activate at ${threshold} to deal ${activateEffect.amount} damage.`;
+      const activateMana = def.effects?.find(
+        (effect) => effect.type === "activate_mana"
+      );
+      if (activateDamage && activateDamage.type === "activate_damage") {
+        const threshold = activateDamage.threshold ?? 0;
+        counterTag.dataset.tooltip = `Counters: ${unit.counter}. Activate at ${threshold} to deal ${activateDamage.amount} damage.`;
+      } else if (activateMana && activateMana.type === "activate_mana") {
+        counterTag.dataset.tooltip = `Counters: ${unit.counter}. Activate to gain ${unit.counter} mana and destroy this.`;
       } else {
         counterTag.dataset.tooltip = `Counters: ${unit.counter}.`;
       }
@@ -2815,9 +2882,10 @@ function renderBoard(container, list, side, options = {}) {
 
     if (side === "player" && def?.type === "effect") {
       const activateEffect = def.effects?.find(
-        (effect) => effect.type === "activate_damage"
+        (effect) =>
+          effect.type === "activate_damage" || effect.type === "activate_mana"
       );
-      if (activateEffect && activateEffect.type === "activate_damage") {
+      if (activateEffect) {
         const sourceRef = unit.uid ?? `player:slot${boardIndex}`;
         const activateActions = cachedLegalActions.filter(
           (action) => action.type === "activate" && action.source === sourceRef
@@ -2966,7 +3034,7 @@ function renderHand(container, hand) {
     chip.appendChild(topRow);
     chip.appendChild(nameEl);
 
-    if (def?.type === "spell" || def?.type === "effect" || def?.type === "mod") {
+    if (def?.effects && def.effects.length > 0) {
       const descText = formatCardDescription(def);
       if (descText) {
         const descEl = document.createElement("div");
@@ -3009,8 +3077,24 @@ function renderHand(container, hand) {
         return;
       }
       const targetedActions = playActions.filter((action) => action.target);
+      const hasSwap =
+        def?.effects?.some((effect) => effect.type === "swap_positions") ?? false;
       if (targetedActions.length <= 1) {
         applyAndRender(targetedActions[0] ?? playActions[0]);
+        return;
+      }
+      if (hasSwap) {
+        if (
+          pendingAction &&
+          pendingAction.type === "play" &&
+          pendingAction.card === cardId &&
+          pendingAction.swap === true
+        ) {
+          pendingAction = null;
+        } else {
+          pendingAction = { type: "play", card: cardId, swap: true };
+        }
+        render();
         return;
       }
       if (
@@ -3024,6 +3108,42 @@ function renderHand(container, hand) {
       }
       render();
     });
+    if (
+      pendingAction &&
+      pendingAction.type === "play" &&
+      pendingAction.card === cardId &&
+      pendingAction.swap
+    ) {
+      const swapActions = playActions.filter(
+        (action) => action.target && action.target.includes("|")
+      );
+      if (swapActions.length > 0) {
+        const targetsRow = document.createElement("div");
+        targetsRow.className = "attack-targets";
+        swapActions.forEach((action) => {
+          const [first, second] = action.target.split("|");
+          const prefix =
+            first.startsWith("player:") && second.startsWith("player:")
+              ? "Your "
+              : first.startsWith("opponent:") && second.startsWith("opponent:")
+              ? "Boss "
+              : "";
+          const label = `${prefix}${describeRef(
+            first,
+            currentState
+          )} ↔ ${prefix}${describeRef(second, currentState)}`;
+          const targetBtn = document.createElement("button");
+          targetBtn.className = "target-button";
+          targetBtn.textContent = label;
+          targetBtn.addEventListener("click", (event) => {
+            event.stopPropagation();
+            applyAndRender(action);
+          });
+          targetsRow.appendChild(targetBtn);
+        });
+        chip.appendChild(targetsRow);
+      }
+    }
     container.appendChild(chip);
   });
 }
@@ -3099,8 +3219,22 @@ function formatCardDescription(def) {
       parts.push(`Give your creatures ${effect.amount} poison`);
       return;
     }
+    if (effect.type === "borrow_enemy") {
+      parts.push(
+        "Borrow a boss creature this round; it returns to the boss at end with double power"
+      );
+      return;
+    }
+    if (effect.type === "swap_positions") {
+      parts.push("Swap two creatures on the same board. Both become tired");
+      return;
+    }
     if (effect.type === "death_damage_boss") {
       parts.push(`On death: deal ${effect.amount} dmg to boss`);
+      return;
+    }
+    if (effect.type === "death_heal_boss") {
+      parts.push(`On death: boss heals ${effect.amount}`);
       return;
     }
     if (effect.type === "death_damage_all_enemies") {
@@ -3121,6 +3255,13 @@ function formatCardDescription(def) {
       );
       return;
     }
+    if (effect.type === "cast_counter") {
+      const amount = effect.amount ?? 1;
+      parts.push(
+        `Gain ${amount} counter${amount === 1 ? "" : "s"} whenever you cast a spell or mod`
+      );
+      return;
+    }
     if (effect.type === "death_counter") {
       const amount = effect.amount ?? 1;
       parts.push(
@@ -3133,6 +3274,22 @@ function formatCardDescription(def) {
       parts.push(
         `Activate at ${threshold} counters: deal ${effect.amount} dmg to any target`
       );
+      return;
+    }
+    if (effect.type === "activate_mana") {
+      parts.push("Activate: gain mana equal to counters, then destroy this");
+      return;
+    }
+    if (effect.type === "mana_on_mod") {
+      parts.push(`Gain ${effect.amount} mana when you play a mod`);
+      return;
+    }
+    if (effect.type === "end_mana") {
+      if (effect.amount < 0) {
+        parts.push(`End of round: lose ${Math.abs(effect.amount)} mana`);
+      } else {
+        parts.push(`End of round: gain ${effect.amount} mana`);
+      }
       return;
     }
     if (effect.type === "buff") {

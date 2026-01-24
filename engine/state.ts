@@ -12,6 +12,8 @@ function cloneInstance(instance: CardInstance): CardInstance {
     shield: instance.shield ?? 0,
     rebirths: instance.rebirths ?? 0,
     counter: instance.counter ?? 0,
+    borrowed: instance.borrowed ?? false,
+    borrowedMultiplier: instance.borrowedMultiplier ?? 0,
   };
 }
 
@@ -81,12 +83,16 @@ export function normalizeState(input: {
     unit.shield = unit.shield ?? 0;
     unit.rebirths = unit.rebirths ?? 0;
     unit.counter = unit.counter ?? 0;
+    unit.borrowed = unit.borrowed ?? false;
+    unit.borrowedMultiplier = unit.borrowedMultiplier ?? 0;
   });
   opponent.board.forEach((unit) => {
     unit.poison = unit.poison ?? 0;
     unit.shield = unit.shield ?? 0;
     unit.rebirths = unit.rebirths ?? 0;
     unit.counter = unit.counter ?? 0;
+    unit.borrowed = unit.borrowed ?? false;
+    unit.borrowedMultiplier = unit.borrowedMultiplier ?? 0;
   });
   opponent.poison = opponent.poison ?? 0;
 

@@ -68,6 +68,8 @@ function cloneInstance(instance) {
     shield: instance.shield ?? 0,
     rebirths: instance.rebirths ?? 0,
     counter: instance.counter ?? 0,
+    borrowed: instance.borrowed ?? false,
+    borrowedMultiplier: instance.borrowedMultiplier ?? 0,
   };
 }
 
@@ -92,12 +94,16 @@ export function normalizeState(input) {
     unit.shield = unit.shield ?? 0;
     unit.rebirths = unit.rebirths ?? 0;
     unit.counter = unit.counter ?? 0;
+    unit.borrowed = unit.borrowed ?? false;
+    unit.borrowedMultiplier = unit.borrowedMultiplier ?? 0;
   });
   opponent.board.forEach((unit) => {
     unit.poison = unit.poison ?? 0;
     unit.shield = unit.shield ?? 0;
     unit.rebirths = unit.rebirths ?? 0;
     unit.counter = unit.counter ?? 0;
+    unit.borrowed = unit.borrowed ?? false;
+    unit.borrowedMultiplier = unit.borrowedMultiplier ?? 0;
   });
   opponent.poison = opponent.poison ?? 0;
 
@@ -227,6 +233,23 @@ function getDeathDamageFromMods(minion, cards) {
   return total;
 }
 
+function getDeathHealFromMods(minion, cards) {
+  const mods = Array.isArray(minion.mods) ? minion.mods : [];
+  let total = 0;
+  mods.forEach((modId) => {
+    const def = cards.byId[modId];
+    if (!def || def.type !== "mod") {
+      return;
+    }
+    def.effects?.forEach((effect) => {
+      if (effect.type === "death_heal_boss") {
+        total += effect.amount;
+      }
+    });
+  });
+  return total;
+}
+
 function getAdjacentCreatureIndexes(board, index, cards) {
   const creatureIndexes = [];
   board.forEach((entry, idx) => {
@@ -265,6 +288,7 @@ function rebuildBoardWithRebirth(state, board, prefix, cards) {
   const nextBoard = [];
   let deaths = 0;
   let deathDamage = 0;
+  let deathHeal = 0;
   const deathEnemyDamage = [];
   board.forEach((minion) => {
     if (!isCreatureInstance(minion, cards)) {
@@ -277,6 +301,7 @@ function rebuildBoardWithRebirth(state, board, prefix, cards) {
     }
     deaths += 1;
     deathDamage += getDeathDamageFromMods(minion, cards);
+    deathHeal += getDeathHealFromMods(minion, cards);
     const def = cards.byId[minion.card];
     const deathSplash = getDeathDamageAllEnemiesFromDef(def);
     if (deathSplash > 0) {
@@ -292,15 +317,17 @@ function rebuildBoardWithRebirth(state, board, prefix, cards) {
           power: basePower + rebirths,
           keywords: def.keywords ? [...def.keywords] : [],
           mods: [],
-          tired: false,
+          tired: Boolean(minion.tired),
           poison: 0,
           shield: 0,
           rebirths,
+          borrowed: minion.borrowed ?? false,
+          borrowedMultiplier: minion.borrowedMultiplier ?? 0,
         });
       }
     }
   });
-  return { board: nextBoard, deaths, deathDamage, deathEnemyDamage };
+  return { board: nextBoard, deaths, deathDamage, deathHeal, deathEnemyDamage };
 }
 
 function handleDeaths(state, cards) {
@@ -326,6 +353,10 @@ function handleDeaths(state, cards) {
   const deathDamage = playerResult.deathDamage + opponentResult.deathDamage;
   if (deathDamage > 0) {
     applyDamageToOpponent(state, deathDamage);
+  }
+  const deathHeal = playerResult.deathHeal + opponentResult.deathHeal;
+  if (deathHeal > 0) {
+    applyHealToOpponent(state, deathHeal);
   }
   const appliedEnemyDamage =
     applyDeathDamageToEnemyBoard(
@@ -368,6 +399,55 @@ function applyDeathCounters(state, cards, deathCount) {
       return;
     }
     unit.counter = (unit.counter ?? 0) + amount * deathCount;
+  });
+}
+
+function applyCastCounters(state, cards, castCount) {
+  if (castCount <= 0) {
+    return;
+  }
+  state.player.board.forEach((unit) => {
+    const def = cards.byId[unit.card];
+    if (!def || def.type !== "effect") {
+      return;
+    }
+    const amount = def.effects?.reduce((sum, effect) => {
+      if (effect.type === "cast_counter") {
+        return sum + (effect.amount ?? 1);
+      }
+      return sum;
+    }, 0);
+    if (!amount) {
+      return;
+    }
+    unit.counter = (unit.counter ?? 0) + amount * castCount;
+  });
+}
+
+function returnBorrowedCreatures(state) {
+  const returning = [];
+  const remaining = [];
+  state.player.board.forEach((unit) => {
+    if (unit.borrowed) {
+      returning.push(unit);
+    } else {
+      remaining.push(unit);
+    }
+  });
+  if (returning.length === 0) {
+    return;
+  }
+  state.player.board = remaining;
+  returning.forEach((unit) => {
+    const multiplier =
+      unit.borrowedMultiplier && unit.borrowedMultiplier > 0
+        ? unit.borrowedMultiplier
+        : 2;
+    unit.power *= multiplier;
+    unit.borrowed = false;
+    unit.borrowedMultiplier = 0;
+    unit.tired = false;
+    state.opponent.board.push(unit);
   });
 }
 
@@ -429,6 +509,10 @@ function applyDamageToMinion(minion, amount) {
 
 function applyDamageToOpponent(state, amount) {
   state.opponent.health = Math.max(0, state.opponent.health - amount);
+}
+
+function applyHealToOpponent(state, amount) {
+  state.opponent.health += amount;
 }
 
 function applyDamageToMinionWithSpawn(state, board, index, amount, prefix, cards) {
@@ -718,6 +802,7 @@ function applyPlay(state, action, cards) {
     }
   } else if (def.type === "spell") {
     applySpellEffects(state, def.effects ?? [], action.target, cards);
+    applyCastCounters(state, cards, 1);
   } else if (def.type === "effect") {
     const instance = {
       uid: allocateUid(state, "p"),
@@ -755,6 +840,8 @@ function applyPlay(state, action, cards) {
     }
     applyModEffects(target, def);
     handleDeaths(state, cards);
+    applyManaOnMod(state, cards);
+    applyCastCounters(state, cards, 1);
   }
 
   state.chainCount += 1;
@@ -801,6 +888,107 @@ function applySpellEffects(state, effects, target, cards) {
     if (effect.type === "grant_keyword_allies") {
       applySpellGrantKeywordAllies(state, effect.keyword, cards);
     }
+    if (effect.type === "borrow_enemy") {
+      applySpellBorrowEnemy(state, target, effect, cards);
+    }
+    if (effect.type === "swap_positions") {
+      applySpellSwapPositions(state, target, cards);
+    }
+  }
+}
+
+function applySpellSwapPositions(state, target, cards) {
+  if (!target) {
+    throw new Error("Swap spell requires two targets");
+  }
+  const [firstRef, secondRef] = target.split("|");
+  if (!firstRef || !secondRef) {
+    throw new Error("Swap spell requires two targets");
+  }
+  const playerIndexA = findPlayerIndexByRef(state, firstRef);
+  const playerIndexB = findPlayerIndexByRef(state, secondRef);
+  const opponentIndexA = findOpponentIndexByRef(state, firstRef);
+  const opponentIndexB = findOpponentIndexByRef(state, secondRef);
+  if (playerIndexA >= 0 && playerIndexB >= 0) {
+    swapBoardPositions(state.player.board, playerIndexA, playerIndexB, cards);
+    return;
+  }
+  if (opponentIndexA >= 0 && opponentIndexB >= 0) {
+    swapBoardPositions(state.opponent.board, opponentIndexA, opponentIndexB, cards);
+    return;
+  }
+  throw new Error("Swap targets must be on the same board");
+}
+
+function swapBoardPositions(board, indexA, indexB, cards) {
+  if (indexA === indexB) {
+    return;
+  }
+  const first = board[indexA];
+  const second = board[indexB];
+  if (!first || !second) {
+    throw new Error("Swap targets not found");
+  }
+  if (!isCreatureInstance(first, cards) || !isCreatureInstance(second, cards)) {
+    throw new Error("Swap targets must be creatures");
+  }
+  board[indexA] = second;
+  board[indexB] = first;
+  first.tired = true;
+  second.tired = true;
+}
+
+function applySpellBorrowEnemy(state, target, effect, cards) {
+  if (!target || !target.startsWith("opponent:slot")) {
+    throw new Error("Borrow spell requires an enemy creature target");
+  }
+  const index = findOpponentIndexByRef(state, target);
+  if (index < 0) {
+    throw new Error(`Invalid spell target: ${target}`);
+  }
+  const minion = state.opponent.board[index];
+  if (!isCreatureInstance(minion, cards)) {
+    throw new Error(`Invalid spell target: ${target}`);
+  }
+  state.opponent.board.splice(index, 1);
+  minion.borrowed = true;
+  minion.borrowedMultiplier = effect.return_multiplier ?? 2;
+  state.player.board.push(minion);
+}
+
+function applyManaOnMod(state, cards) {
+  let total = 0;
+  state.player.board.forEach((unit) => {
+    const def = cards.byId[unit.card];
+    if (!def || def.type !== "effect") {
+      return;
+    }
+    def.effects?.forEach((effect) => {
+      if (effect.type === "mana_on_mod") {
+        total += effect.amount;
+      }
+    });
+  });
+  if (total > 0) {
+    state.player.mana += total;
+  }
+}
+
+function applyEndManaAdjustments(state, cards) {
+  let total = 0;
+  state.player.board.forEach((unit) => {
+    const def = cards.byId[unit.card];
+    if (!def || def.type !== "effect") {
+      return;
+    }
+    def.effects?.forEach((effect) => {
+      if (effect.type === "end_mana") {
+        total += effect.amount;
+      }
+    });
+  });
+  if (total !== 0) {
+    state.player.mana = Math.max(0, state.player.mana + total);
   }
 }
 
@@ -1060,6 +1248,15 @@ function applyActivateDamage(state, source, effect, target, cards) {
   source.counter = (source.counter ?? 0) - effect.threshold;
 }
 
+function applyActivateMana(state, sourceIndex, source) {
+  const counter = source.counter ?? 0;
+  if (counter <= 0) {
+    throw new Error("Not enough counters to activate");
+  }
+  state.player.mana += counter;
+  state.player.board.splice(sourceIndex, 1);
+}
+
 function applyActivate(state, action, cards) {
   const sourceIndex = findPlayerIndexByRef(state, action.source);
   if (sourceIndex < 0) {
@@ -1076,6 +1273,13 @@ function applyActivate(state, action, cards) {
         throw new Error("Activate requires a target");
       }
       applyActivateDamage(state, source, activateEffect, action.target, cards);
+      return state;
+    }
+    const activateMana = def.effects?.find(
+      (effect) => effect.type === "activate_mana"
+    );
+    if (activateMana && activateMana.type === "activate_mana") {
+      applyActivateMana(state, sourceIndex, source);
       return state;
     }
   }
@@ -1122,6 +1326,8 @@ function applyEnd(state, cards) {
   applyEndAdjacentBuffs(state, state.player.board, cards);
   applyEndAdjacentBuffs(state, state.opponent.board, cards);
   applyEndMassDeathClones(state, cards);
+  returnBorrowedCreatures(state);
+  applyEndManaAdjustments(state, cards);
   state.player.board.forEach((minion) => {
     minion.tired = false;
   });
@@ -1196,6 +1402,47 @@ export function getLegalActions(state, cards) {
         opponentTargets.forEach((target) =>
           actions.push({ type: "play", card: cardId, target })
         );
+        return;
+      }
+      const hasBorrow =
+        def.effects?.some((effect) => effect.type === "borrow_enemy") ?? false;
+      if (hasBorrow) {
+        const opponentTargets = state.opponent.board
+          .map((minion, idx) => ({ minion, idx }))
+          .filter((entry) => isCreatureInstance(entry.minion, cards))
+          .map((entry) => `opponent:slot${entry.idx}`);
+        if (opponentTargets.length === 0) {
+          return;
+        }
+        opponentTargets.forEach((target) =>
+          actions.push({ type: "play", card: cardId, target })
+        );
+        return;
+      }
+      const hasSwap =
+        def.effects?.some((effect) => effect.type === "swap_positions") ?? false;
+      if (hasSwap) {
+        const playerSlots = state.player.board
+          .map((minion, idx) => ({ minion, idx }))
+          .filter((entry) => isCreatureInstance(entry.minion, cards))
+          .map((entry) => entry.idx);
+        const opponentSlots = state.opponent.board
+          .map((minion, idx) => ({ minion, idx }))
+          .filter((entry) => isCreatureInstance(entry.minion, cards))
+          .map((entry) => entry.idx);
+        const addPairs = (slots, prefix) => {
+          for (let i = 0; i < slots.length; i += 1) {
+            for (let j = i + 1; j < slots.length; j += 1) {
+              actions.push({
+                type: "play",
+                card: cardId,
+                target: `${prefix}:slot${slots[i]}|${prefix}:slot${slots[j]}`,
+              });
+            }
+          }
+        };
+        addPairs(playerSlots, "player");
+        addPairs(opponentSlots, "opponent");
         return;
       }
     }
@@ -1298,35 +1545,42 @@ export function getLegalActions(state, cards) {
     const activateEffect = def.effects?.find(
       (effect) => effect.type === "activate_damage"
     );
-    if (!activateEffect || activateEffect.type !== "activate_damage") {
-      return;
-    }
-    const threshold = activateEffect.threshold ?? 0;
-    if ((unit.counter ?? 0) < threshold) {
-      return;
-    }
-    const sourceRef = unit.uid ?? `player:slot${idx}`;
-    actions.push({ type: "activate", source: sourceRef, target: "opponent" });
-    state.opponent.board.forEach((enemy, enemyIndex) => {
-      if (!isCreatureInstance(enemy, cards)) {
-        return;
+    if (activateEffect && activateEffect.type === "activate_damage") {
+      const threshold = activateEffect.threshold ?? 0;
+      if ((unit.counter ?? 0) >= threshold) {
+        const sourceRef = unit.uid ?? `player:slot${idx}`;
+        actions.push({ type: "activate", source: sourceRef, target: "opponent" });
+        state.opponent.board.forEach((enemy, enemyIndex) => {
+          if (!isCreatureInstance(enemy, cards)) {
+            return;
+          }
+          actions.push({
+            type: "activate",
+            source: sourceRef,
+            target: `opponent:slot${enemyIndex}`,
+          });
+        });
+        state.player.board.forEach((ally, allyIndex) => {
+          if (!isCreatureInstance(ally, cards)) {
+            return;
+          }
+          actions.push({
+            type: "activate",
+            source: sourceRef,
+            target: `player:slot${allyIndex}`,
+          });
+        });
       }
-      actions.push({
-        type: "activate",
-        source: sourceRef,
-        target: `opponent:slot${enemyIndex}`,
-      });
-    });
-    state.player.board.forEach((ally, allyIndex) => {
-      if (!isCreatureInstance(ally, cards)) {
-        return;
+    }
+    const activateMana = def.effects?.find(
+      (effect) => effect.type === "activate_mana"
+    );
+    if (activateMana && activateMana.type === "activate_mana") {
+      if ((unit.counter ?? 0) > 0) {
+        const sourceRef = unit.uid ?? `player:slot${idx}`;
+        actions.push({ type: "activate", source: sourceRef });
       }
-      actions.push({
-        type: "activate",
-        source: sourceRef,
-        target: `player:slot${allyIndex}`,
-      });
-    });
+    }
   });
 
   actions.push({ type: "end" });

@@ -74,16 +74,9 @@ body::after {
 }
 
 .brand-mark {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 14px;
-  background: var(--accent-2);
-  color: #fffaf0;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  box-shadow: 0 10px 24px rgba(36, 74, 98, 0.3);
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
 }
 
 .brand-title {
