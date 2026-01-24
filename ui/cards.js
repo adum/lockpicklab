@@ -140,6 +140,16 @@ function formatEffects(card) {
       if (effect.type === "swap_positions") {
         return "Swap two creatures on the same board. Both become tired";
       }
+      if (effect.type === "repeat_last_spell") {
+        const surcharge = effect.surcharge ?? 1;
+        return `Repeat your last spell (pay +${surcharge} mana)`;
+      }
+      if (effect.type === "devour_ally") {
+        return "On play: devour a friendly creature and gain its power";
+      }
+      if (effect.type === "enter_tired") {
+        return "Enters tired";
+      }
       if (effect.type === "death_damage_boss") {
         return `On death: deal ${effect.amount} damage to boss`;
       }
@@ -148,6 +158,9 @@ function formatEffects(card) {
       }
       if (effect.type === "death_damage_all_enemies") {
         return `On death: deal ${effect.amount} damage to enemy creatures`;
+      }
+      if (effect.type === "death_after_attack") {
+        return "After this creature attacks, it dies";
       }
       if (effect.type === "purge_mods") {
         return "Remove all mods from a creature";
@@ -182,6 +195,17 @@ function formatEffects(card) {
         }
         return `End of round: gain ${effect.amount} mana`;
       }
+      if (effect.type === "end_damage_boss") {
+        return `End of round: deal ${effect.amount} damage to boss`;
+      }
+      if (effect.type === "end_self_buff") {
+        if (effect.stat === "power") {
+          if (effect.amount < 0) {
+            return `End of round: this loses ${Math.abs(effect.amount)} power`;
+          }
+          return `End of round: this gains ${effect.amount} power`;
+        }
+      }
       if (effect.type === "buff") {
         if (effect.amount < 0) {
           return `Lose ${Math.abs(effect.amount)} power`;
@@ -205,6 +229,13 @@ function formatEffects(card) {
       }
       if (effect.type === "end_adjacent_buff") {
         return `End of round: adjacent allies gain +${effect.amount} power`;
+      }
+      if (effect.type === "no_attack") {
+        return "Cannot attack";
+      }
+      if (effect.type === "anchored_aura") {
+        const amount = effect.amount ?? 1;
+        return `Adjacent allies gain +${amount} power`;
       }
       if (effect.type === "grant_keyword") {
         return `Grant ${formatKeyword(effect.keyword)}`;

@@ -58,6 +58,10 @@ Turncoat: move a boss creature to your board this round; at end of round it retu
 
 Swap Step: swap two creatures on the same board; both become tired.
 
+Echo Step: repeat the last spell you cast (pay +1 extra mana). Cannot repeat Echo Step.
+
+Devourer: on play, devour a friendly creature and gain its power. It enters tired and loses 1 power at end of each round.
+
 
 
 Effects stay on the battlefield indefinitely. For example, a War Banner effect gives all player creatures +1 power while attacking.
@@ -72,6 +76,8 @@ Arcane Reservoir: whenever you cast a spell or mod, it gains a counter. You may 
 
 Debt Ledger: when you play a mod, gain 1 mana. At end of round, lose 2 mana.
 
+Doomclock: at end of round, deal 2 damage to the boss and lose 1 mana.
+
 
 
 Mods attach to any creature (player or boss) and permanently modify it, such as granting Pierce or a damage shield.
@@ -80,6 +86,9 @@ Wooden Shield: reduces the creature's power by 1, then blocks the next damage it
 
 Blood Pact: gives +3 power. When the creature dies, the boss heals 3.
 
+Brittle Blessing: gives +4 power. After this creature attacks, it dies.
+
+Anchored: this creature cannot attack; adjacent allies gain +1 power.
 
 Testudo: if a creature with Testudo has friendly creatures on both sides of it on the board, it takes no combat damage (attacking or defending).
 

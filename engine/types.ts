@@ -59,6 +59,39 @@ export interface BorrowEnemyEffect {
   return_multiplier?: number;
 }
 
+export interface DevourAllyEffect {
+  type: "devour_ally";
+}
+
+export interface EndSelfBuffEffect {
+  type: "end_self_buff";
+  stat: "power";
+  amount: number;
+}
+
+export interface DeathAfterAttackEffect {
+  type: "death_after_attack";
+}
+
+export interface NoAttackEffect {
+  type: "no_attack";
+}
+
+export interface AnchoredAuraEffect {
+  type: "anchored_aura";
+  amount: number;
+}
+
+export interface RepeatLastSpellEffect {
+  type: "repeat_last_spell";
+  surcharge?: number;
+}
+
+export interface EndDamageBossEffect {
+  type: "end_damage_boss";
+  amount: number;
+}
+
 export interface SwapPositionsEffect {
   type: "swap_positions";
 }
@@ -162,6 +195,13 @@ export type EffectDefinition =
   | SummonEnemyBroodlingEffect
   | EndCloneBossOnMassDeathEffect
   | BorrowEnemyEffect
+  | DevourAllyEffect
+  | EndSelfBuffEffect
+  | DeathAfterAttackEffect
+  | NoAttackEffect
+  | AnchoredAuraEffect
+  | RepeatLastSpellEffect
+  | EndDamageBossEffect
   | SwapPositionsEffect
   | DeathHealBossEffect
   | ManaOnModEffect
@@ -210,6 +250,7 @@ export interface CardInstance {
   counter?: number;
   borrowed?: boolean;
   borrowedMultiplier?: number;
+  anchoredBonus?: number;
 }
 
 export interface SideState {
@@ -238,6 +279,10 @@ export interface GameState {
   manaPerRound: number;
   targetRounds?: number;
   roundDeaths?: number;
+  lastSpell?: {
+    cardId: string;
+    target?: string;
+  } | null;
 }
 
 export type PlayAction = {

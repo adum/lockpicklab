@@ -58,6 +58,40 @@ function hasKeywordDef(def: CardDefinition | undefined, keyword: Keyword): boole
   return def?.keywords?.includes(keyword) ?? false;
 }
 
+function hasModEffect(
+  minion: CardInstance,
+  cards: CardLibrary,
+  effectType: EffectDefinition["type"]
+): boolean {
+  return (minion.mods ?? []).some((modId) => {
+    const def = cards.byId[modId];
+    if (!def || def.type !== "mod") {
+      return false;
+    }
+    return def.effects?.some((effect) => effect.type === effectType) ?? false;
+  });
+}
+
+function sumModEffectAmount(
+  minion: CardInstance,
+  cards: CardLibrary,
+  effectType: EffectDefinition["type"]
+): number {
+  let total = 0;
+  (minion.mods ?? []).forEach((modId) => {
+    const def = cards.byId[modId];
+    if (!def || def.type !== "mod") {
+      return;
+    }
+    def.effects?.forEach((effect) => {
+      if (effect.type === effectType && "amount" in effect) {
+        total += (effect.amount as number) ?? 0;
+      }
+    });
+  });
+  return total;
+}
+
 function allocateUid(state: GameState, prefix: "p" | "o"): string {
   const uid = `${prefix}${state.nextUid}`;
   state.nextUid += 1;
@@ -315,6 +349,9 @@ function handleDeaths(state: GameState, cards: CardLibrary): void {
   }
   applyDeathCounters(state, cards, deathCount);
   applyScavengerBuffs(state, cards, deathCount);
+  if (applyAnchoredBonuses(state, cards)) {
+    handleDeaths(state, cards);
+  }
 }
 
 function applyDeathCounters(
@@ -624,6 +661,69 @@ function applyEndBuffs(state: GameState, cards: CardLibrary): void {
   });
 }
 
+function applyAnchoredBonuses(state: GameState, cards: CardLibrary): boolean {
+  let deathTriggered = false;
+  [state.player.board, state.opponent.board].forEach((board) => {
+    const desiredBonuses = new Map<number, number>();
+    board.forEach((minion, index) => {
+      if (!isCreatureInstance(minion, cards)) {
+        return;
+      }
+      if (!hasModEffect(minion, cards, "anchored_aura")) {
+        return;
+      }
+      const amount = sumModEffectAmount(minion, cards, "anchored_aura") || 1;
+      const left = index - 1;
+      const right = index + 1;
+      if (left >= 0 && isCreatureInstance(board[left], cards)) {
+        desiredBonuses.set(left, (desiredBonuses.get(left) ?? 0) + amount);
+      }
+      if (right < board.length && isCreatureInstance(board[right], cards)) {
+        desiredBonuses.set(right, (desiredBonuses.get(right) ?? 0) + amount);
+      }
+    });
+    board.forEach((minion, index) => {
+      if (!isCreatureInstance(minion, cards)) {
+        return;
+      }
+      const nextBonus = desiredBonuses.get(index) ?? 0;
+      const prevBonus = minion.anchoredBonus ?? 0;
+      if (nextBonus !== prevBonus) {
+        minion.power += nextBonus - prevBonus;
+        minion.anchoredBonus = nextBonus;
+        if (minion.power <= 0) {
+          deathTriggered = true;
+        }
+      }
+    });
+  });
+  return deathTriggered;
+}
+
+function applyEndSelfBuffs(state: GameState, cards: CardLibrary): boolean {
+  let changed = false;
+  [state.player.board, state.opponent.board].forEach((board) => {
+    board.forEach((minion) => {
+      if (!isCreatureInstance(minion, cards)) {
+        return;
+      }
+      const def = cards.byId[minion.card];
+      if (!def) {
+        return;
+      }
+      def.effects?.forEach((effect) => {
+        if (effect.type === "end_self_buff" && effect.stat === "power") {
+          if (effect.amount !== 0) {
+            minion.power += effect.amount;
+            changed = true;
+          }
+        }
+      });
+    });
+  });
+  return changed;
+}
+
 function applyEndAdjacentBuffs(
   state: GameState,
   board: CardInstance[],
@@ -733,8 +833,18 @@ function applyPlay(state: GameState, action: PlayAction, cards: CardLibrary): Ga
   if (handIndex < 0) {
     throw new Error(`Card not in hand: ${action.card}`);
   }
+  const repeatEffect = def.effects?.find(
+    (effect) => effect.type === "repeat_last_spell"
+  );
+  const repeatSurcharge =
+    repeatEffect && repeatEffect.type === "repeat_last_spell"
+      ? repeatEffect.surcharge ?? 1
+      : 0;
   if (state.player.mana < def.cost) {
     throw new Error(`Not enough mana for ${action.card}`);
+  }
+  if (repeatSurcharge > 0 && state.player.mana < def.cost + repeatSurcharge) {
+    throw new Error("Not enough mana to repeat the last spell");
   }
   if (def.type === "creature") {
     const requiresReadyAlly =
@@ -756,10 +866,29 @@ function applyPlay(state: GameState, action: PlayAction, cards: CardLibrary): Ga
     if (!def.stats) {
       throw new Error(`Creature missing stats: ${def.id}`);
     }
+    const devourEffect = def.effects?.find(
+      (effect) => effect.type === "devour_ally"
+    );
+    let devourTargetIndex = -1;
+    let devourPower = 0;
+    if (devourEffect && devourEffect.type === "devour_ally") {
+      if (!action.target) {
+        throw new Error("Devour requires a friendly creature target");
+      }
+      devourTargetIndex = findPlayerIndexByRef(state, action.target);
+      if (devourTargetIndex < 0) {
+        throw new Error(`Invalid devour target: ${action.target}`);
+      }
+      const devourTarget = state.player.board[devourTargetIndex];
+      if (!isCreatureInstance(devourTarget, cards)) {
+        throw new Error("Devour target must be a creature");
+      }
+      devourPower = devourTarget.power;
+    }
     const instance: CardInstance = {
       uid: allocateUid(state, "p"),
       card: def.id,
-      power: def.stats.power,
+      power: def.stats.power + devourPower,
       keywords: def.keywords ? [...def.keywords] : [],
       mods: [],
       tired: def.effects?.some((effect) => effect.type === "enter_tired") ?? false,
@@ -767,7 +896,19 @@ function applyPlay(state: GameState, action: PlayAction, cards: CardLibrary): Ga
       shield: 0,
       rebirths: 0,
     };
-    state.player.board.push(instance);
+    if (devourTargetIndex >= 0) {
+      state.player.board.splice(devourTargetIndex, 0, instance);
+      const eaten = state.player.board[devourTargetIndex + 1];
+      if (eaten) {
+        eaten.power = 0;
+      }
+      handleDeaths(state, cards);
+    } else {
+      state.player.board.push(instance);
+    }
+    if (applyAnchoredBonuses(state, cards)) {
+      handleDeaths(state, cards);
+    }
     if (def.effects?.some((effect) => effect.type === "play_tire_allies")) {
       state.player.board.forEach((minion) => {
         if (isCreatureInstance(minion, cards)) {
@@ -786,6 +927,17 @@ function applyPlay(state: GameState, action: PlayAction, cards: CardLibrary): Ga
     }
   } else if (def.type === "spell") {
     applySpellEffects(state, def.effects ?? [], action.target, cards);
+    if (repeatSurcharge > 0) {
+      state.player.mana -= repeatSurcharge;
+      const repeated = applyRepeatLastSpell(
+        state,
+        repeatEffect ?? { surcharge: repeatSurcharge },
+        cards
+      );
+      state.lastSpell = repeated;
+    } else {
+      state.lastSpell = { cardId: def.id, target: action.target };
+    }
     applyCastCounters(state, cards, 1);
   } else if (def.type === "effect") {
     const instance: CardInstance = {
@@ -824,6 +976,9 @@ function applyPlay(state: GameState, action: PlayAction, cards: CardLibrary): Ga
     }
     applyModEffects(target, def);
     handleDeaths(state, cards);
+    if (applyAnchoredBonuses(state, cards)) {
+      handleDeaths(state, cards);
+    }
     applyManaOnMod(state, cards);
     applyCastCounters(state, cards, 1);
   }
@@ -886,6 +1041,26 @@ function applySpellEffects(
   }
 }
 
+function applyRepeatLastSpell(
+  state: GameState,
+  effect: { surcharge?: number },
+  cards: CardLibrary
+): { cardId: string; target?: string } {
+  const last = state.lastSpell;
+  if (!last) {
+    throw new Error("No spell to repeat");
+  }
+  const def = cards.byId[last.cardId];
+  if (!def || def.type !== "spell") {
+    throw new Error("Last spell is invalid");
+  }
+  if (def.effects?.some((entry) => entry.type === "repeat_last_spell")) {
+    throw new Error("Cannot repeat Echo Step");
+  }
+  applySpellEffects(state, def.effects ?? [], last.target, cards);
+  return last;
+}
+
 function applySpellSwapPositions(
   state: GameState,
   target: string | undefined,
@@ -904,10 +1079,16 @@ function applySpellSwapPositions(
   const opponentIndexB = findOpponentIndexByRef(state, secondRef);
   if (playerIndexA >= 0 && playerIndexB >= 0) {
     swapBoardPositions(state.player.board, playerIndexA, playerIndexB, cards);
+    if (applyAnchoredBonuses(state, cards)) {
+      handleDeaths(state, cards);
+    }
     return;
   }
   if (opponentIndexA >= 0 && opponentIndexB >= 0) {
     swapBoardPositions(state.opponent.board, opponentIndexA, opponentIndexB, cards);
+    if (applyAnchoredBonuses(state, cards)) {
+      handleDeaths(state, cards);
+    }
     return;
   }
   throw new Error("Swap targets must be on the same board");
@@ -957,6 +1138,9 @@ function applySpellBorrowEnemy(
   minion.borrowed = true;
   minion.borrowedMultiplier = effect.return_multiplier ?? 2;
   state.player.board.push(minion);
+  if (applyAnchoredBonuses(state, cards)) {
+    handleDeaths(state, cards);
+  }
 }
 
 function applyManaOnMod(state: GameState, cards: CardLibrary): void {
@@ -992,6 +1176,24 @@ function applyEndManaAdjustments(state: GameState, cards: CardLibrary): void {
   });
   if (total !== 0) {
     state.player.mana = Math.max(0, state.player.mana + total);
+  }
+}
+
+function applyEndBossDamage(state: GameState, cards: CardLibrary): void {
+  let total = 0;
+  state.player.board.forEach((unit) => {
+    const def = cards.byId[unit.card];
+    if (!def || def.type !== "effect") {
+      return;
+    }
+    def.effects?.forEach((effect) => {
+      if (effect.type === "end_damage_boss") {
+        total += effect.amount;
+      }
+    });
+  });
+  if (total > 0) {
+    applyDamageToOpponent(state, total);
   }
 }
 
@@ -1099,6 +1301,9 @@ function applySpellPurgeMods(
   } else {
     instance.shield = instance.shield ?? 0;
   }
+  if (applyAnchoredBonuses(state, cards)) {
+    handleDeaths(state, cards);
+  }
 }
 
 function resolveTargetCreature(
@@ -1153,6 +1358,9 @@ function applyAttack(state: GameState, action: AttackAction, cards: CardLibrary)
   }
   if (attacker.tired) {
     throw new Error(`Source is tired: ${action.source}`);
+  }
+  if (hasModEffect(attacker, cards, "no_attack")) {
+    throw new Error(`Source cannot attack: ${action.source}`);
   }
 
   const guardIndexes = enemyGuardIndexes(state, cards);
@@ -1229,6 +1437,16 @@ function applyAttack(state: GameState, action: AttackAction, cards: CardLibrary)
 
   attacker.tired = true;
   handleDeaths(state, cards);
+  if (hasModEffect(attacker, cards, "death_after_attack")) {
+    const attackerUid = attacker.uid;
+    const attackerIndex = attackerUid
+      ? state.player.board.findIndex((minion) => minion.uid === attackerUid)
+      : sourceIndex;
+    if (attackerIndex >= 0 && state.player.board[attackerIndex]) {
+      state.player.board[attackerIndex].power = 0;
+      handleDeaths(state, cards);
+    }
+  }
 
   return state;
 }
@@ -1367,8 +1585,15 @@ function applyEnd(state: GameState, cards: CardLibrary): GameState {
   applyEndBuffs(state, cards);
   applyEndAdjacentBuffs(state, state.player.board, cards);
   applyEndAdjacentBuffs(state, state.opponent.board, cards);
+  if (applyEndSelfBuffs(state, cards)) {
+    handleDeaths(state, cards);
+  }
+  applyEndBossDamage(state, cards);
   applyEndMassDeathClones(state, cards);
   returnBorrowedCreatures(state);
+  if (applyAnchoredBonuses(state, cards)) {
+    handleDeaths(state, cards);
+  }
   applyEndManaAdjustments(state, cards);
   state.player.board.forEach((minion) => {
     minion.tired = false;
@@ -1377,6 +1602,7 @@ function applyEnd(state: GameState, cards: CardLibrary): GameState {
   state.turn += 1;
   state.player.mana += state.manaPerRound;
   state.roundDeaths = 0;
+  state.lastSpell = null;
   return state;
 }
 
@@ -1419,6 +1645,18 @@ export function getLegalActions(state: GameState, cards: CardLibrary): Action[] 
     }
 
     if (def.type === "spell") {
+      const repeatEffect = def.effects?.find(
+        (effect) => effect.type === "repeat_last_spell"
+      );
+      if (repeatEffect && repeatEffect.type === "repeat_last_spell") {
+        if (!state.lastSpell) {
+          continue;
+        }
+        const surcharge = repeatEffect.surcharge ?? 1;
+        if (state.player.mana < def.cost + surcharge) {
+          continue;
+        }
+      }
       const hasDamage = def.effects?.some((effect) => effect.type === "damage") ?? false;
       if (hasDamage) {
         actions.push({ type: "play", card: cardId, target: "opponent" });
@@ -1544,6 +1782,21 @@ export function getLegalActions(state: GameState, cards: CardLibrary): Action[] 
           continue;
         }
       }
+      const hasDevour =
+        def.effects?.some((effect) => effect.type === "devour_ally") ?? false;
+      if (hasDevour) {
+        const targets = state.player.board
+          .map((minion, idx) => ({ minion, idx }))
+          .filter((entry) => isCreatureInstance(entry.minion, cards))
+          .map((entry) => `player:slot${entry.idx}`);
+        if (targets.length === 0) {
+          continue;
+        }
+        targets.forEach((target) =>
+          actions.push({ type: "play", card: cardId, target })
+        );
+        continue;
+      }
     }
 
     actions.push({ type: "play", card: cardId });
@@ -1554,6 +1807,9 @@ export function getLegalActions(state: GameState, cards: CardLibrary): Action[] 
       return;
     }
     if (minion.tired) {
+      return;
+    }
+    if (hasModEffect(minion, cards, "no_attack")) {
       return;
     }
     const sourceRef = minion.uid ?? `player:slot${idx}`;

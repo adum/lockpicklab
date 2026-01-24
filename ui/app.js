@@ -26,6 +26,16 @@ const fallbackCards = {
       effects: [{ type: "grant_keyword", keyword: "pierce" }],
     },
     {
+      id: "brittle_blessing",
+      name: "Brittle Blessing",
+      type: "mod",
+      cost: 2,
+      effects: [
+        { type: "buff", stat: "power", amount: 4 },
+        { type: "death_after_attack" },
+      ],
+    },
+    {
       id: "blood_pact",
       name: "Blood Pact",
       type: "mod",
@@ -53,6 +63,13 @@ const fallbackCards = {
       ],
     },
     {
+      id: "anchored",
+      name: "Anchored",
+      type: "mod",
+      cost: 2,
+      effects: [{ type: "no_attack" }, { type: "anchored_aura", amount: 1 }],
+    },
+    {
       id: "requiem_rune",
       name: "Requiem Rune",
       type: "mod",
@@ -72,6 +89,16 @@ const fallbackCards = {
       type: "effect",
       cost: 2,
       effects: [{ type: "aura", stat: "power", amount: 1, applies_to: "attack" }],
+    },
+    {
+      id: "doomclock",
+      name: "Doomclock",
+      type: "effect",
+      cost: 2,
+      effects: [
+        { type: "end_damage_boss", amount: 2 },
+        { type: "end_mana", amount: -1 },
+      ],
     },
     {
       id: "debt_ledger",
@@ -188,6 +215,13 @@ const fallbackCards = {
       effects: [{ type: "swap_positions" }],
     },
     {
+      id: "echo_step",
+      name: "Echo Step",
+      type: "spell",
+      cost: 1,
+      effects: [{ type: "repeat_last_spell", surcharge: 1 }],
+    },
+    {
       id: "toxic_mist",
       name: "Toxic Mist",
       type: "spell",
@@ -217,6 +251,18 @@ const fallbackCards = {
       cost: 2,
       stats: { power: 4 },
       effects: [{ type: "summon_enemy_broodling", amount: 1 }],
+    },
+    {
+      id: "devourer",
+      name: "Devourer",
+      type: "creature",
+      cost: 3,
+      stats: { power: 2 },
+      effects: [
+        { type: "devour_ally" },
+        { type: "enter_tired" },
+        { type: "end_self_buff", stat: "power", amount: -1 },
+      ],
     },
     {
       id: "spider",
@@ -297,12 +343,12 @@ const defaultPuzzle = {
   player: {
     mana: 15,
     hand: [
-      "cultist",
-      "lancer",
       "brood_herald",
-      "blood_pact",
-      "swap_step",
-      "debt_ledger",
+      "devourer",
+      "brittle_blessing",
+      "anchored",
+      "echo_step",
+      "doomclock",
     ],
     board: [],
   },
@@ -3229,6 +3275,19 @@ function formatCardDescription(def) {
       parts.push("Swap two creatures on the same board. Both become tired");
       return;
     }
+    if (effect.type === "repeat_last_spell") {
+      const surcharge = effect.surcharge ?? 1;
+      parts.push(`Repeat your last spell (pay +${surcharge} mana)`);
+      return;
+    }
+    if (effect.type === "devour_ally") {
+      parts.push("On play: devour a friendly creature and gain its power");
+      return;
+    }
+    if (effect.type === "enter_tired") {
+      parts.push("Enters tired");
+      return;
+    }
     if (effect.type === "death_damage_boss") {
       parts.push(`On death: deal ${effect.amount} dmg to boss`);
       return;
@@ -3239,6 +3298,10 @@ function formatCardDescription(def) {
     }
     if (effect.type === "death_damage_all_enemies") {
       parts.push(`On death: deal ${effect.amount} dmg to enemy creatures`);
+      return;
+    }
+    if (effect.type === "death_after_attack") {
+      parts.push("After this creature attacks, it dies");
       return;
     }
     if (effect.type === "purge_mods") {
@@ -3292,6 +3355,20 @@ function formatCardDescription(def) {
       }
       return;
     }
+    if (effect.type === "end_damage_boss") {
+      parts.push(`End of round: deal ${effect.amount} dmg to boss`);
+      return;
+    }
+    if (effect.type === "end_self_buff") {
+      if (effect.stat === "power") {
+        if (effect.amount < 0) {
+          parts.push(`End of round: this loses ${Math.abs(effect.amount)} power`);
+        } else {
+          parts.push(`End of round: this gains ${effect.amount} power`);
+        }
+      }
+      return;
+    }
     if (effect.type === "buff") {
       if (effect.amount < 0) {
         parts.push(`Lose ${Math.abs(effect.amount)} power`);
@@ -3322,6 +3399,15 @@ function formatCardDescription(def) {
     }
     if (effect.type === "end_adjacent_buff") {
       parts.push(`End of round: adjacent allies gain +${effect.amount} power`);
+      return;
+    }
+    if (effect.type === "no_attack") {
+      parts.push("Cannot attack");
+      return;
+    }
+    if (effect.type === "anchored_aura") {
+      const amount = effect.amount ?? 1;
+      parts.push(`Adjacent allies gain +${amount} power`);
       return;
     }
     if (effect.type === "grant_keyword") {

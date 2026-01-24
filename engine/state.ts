@@ -14,6 +14,7 @@ function cloneInstance(instance: CardInstance): CardInstance {
     counter: instance.counter ?? 0,
     borrowed: instance.borrowed ?? false,
     borrowedMultiplier: instance.borrowedMultiplier ?? 0,
+    anchoredBonus: instance.anchoredBonus ?? 0,
   };
 }
 
@@ -48,6 +49,7 @@ export function cloneState(state: GameState): GameState {
     manaPerRound: state.manaPerRound,
     targetRounds: state.targetRounds,
     roundDeaths: state.roundDeaths ?? 0,
+    lastSpell: state.lastSpell ?? null,
   };
 }
 
@@ -73,6 +75,7 @@ export function normalizeState(input: {
   manaPerRound?: number;
   targetRounds?: number;
   roundDeaths?: number;
+  lastSpell?: GameState["lastSpell"];
 }): GameState {
   const nextUidRef = { value: input.nextUid ?? 1 };
   const player = cloneSide(input.player);
@@ -85,6 +88,7 @@ export function normalizeState(input: {
     unit.counter = unit.counter ?? 0;
     unit.borrowed = unit.borrowed ?? false;
     unit.borrowedMultiplier = unit.borrowedMultiplier ?? 0;
+    unit.anchoredBonus = unit.anchoredBonus ?? 0;
   });
   opponent.board.forEach((unit) => {
     unit.poison = unit.poison ?? 0;
@@ -93,6 +97,7 @@ export function normalizeState(input: {
     unit.counter = unit.counter ?? 0;
     unit.borrowed = unit.borrowed ?? false;
     unit.borrowedMultiplier = unit.borrowedMultiplier ?? 0;
+    unit.anchoredBonus = unit.anchoredBonus ?? 0;
   });
   opponent.poison = opponent.poison ?? 0;
 
@@ -108,5 +113,6 @@ export function normalizeState(input: {
     manaPerRound: input.manaPerRound ?? 0,
     targetRounds: input.targetRounds,
     roundDeaths: input.roundDeaths ?? 0,
+    lastSpell: input.lastSpell ?? null,
   };
 }
