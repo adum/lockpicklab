@@ -144,6 +144,11 @@ function formatEffects(card) {
         const surcharge = effect.surcharge ?? 1;
         return `Repeat your last spell (pay +${surcharge} mana)`;
       }
+      if (effect.type === "execute_threshold") {
+        const threshold = effect.threshold ?? 0;
+        const manaGain = effect.mana_gain ?? 0;
+        return `Destroy all creatures with ${threshold}+ power and gain ${manaGain} mana each`;
+      }
       if (effect.type === "devour_ally") {
         return "On play: devour a friendly creature and gain its power";
       }

@@ -222,6 +222,13 @@ const fallbackCards = {
       effects: [{ type: "repeat_last_spell", surcharge: 1 }],
     },
     {
+      id: "colossus_bane",
+      name: "Colossus Bane",
+      type: "spell",
+      cost: 3,
+      effects: [{ type: "execute_threshold", threshold: 15, mana_gain: 3 }],
+    },
+    {
       id: "toxic_mist",
       name: "Toxic Mist",
       type: "spell",
@@ -346,9 +353,9 @@ const defaultPuzzle = {
       "brood_herald",
       "devourer",
       "brittle_blessing",
-      "anchored",
       "echo_step",
       "doomclock",
+      "colossus_bane",
     ],
     board: [],
   },
@@ -3278,6 +3285,14 @@ function formatCardDescription(def) {
     if (effect.type === "repeat_last_spell") {
       const surcharge = effect.surcharge ?? 1;
       parts.push(`Repeat your last spell (pay +${surcharge} mana)`);
+      return;
+    }
+    if (effect.type === "execute_threshold") {
+      const threshold = effect.threshold ?? 0;
+      const manaGain = effect.mana_gain ?? 0;
+      parts.push(
+        `Destroy all creatures with ${threshold}+ power and gain ${manaGain} mana each`
+      );
       return;
     }
     if (effect.type === "devour_ally") {

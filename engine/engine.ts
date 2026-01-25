@@ -1038,6 +1038,9 @@ function applySpellEffects(
     if (effect.type === "swap_positions") {
       applySpellSwapPositions(state, target, cards);
     }
+    if (effect.type === "execute_threshold") {
+      applySpellExecuteThreshold(state, effect, cards);
+    }
   }
 }
 
@@ -1303,6 +1306,31 @@ function applySpellPurgeMods(
   }
   if (applyAnchoredBonuses(state, cards)) {
     handleDeaths(state, cards);
+  }
+}
+
+function applySpellExecuteThreshold(
+  state: GameState,
+  effect: { threshold: number; mana_gain?: number },
+  cards: CardLibrary
+): void {
+  const threshold = effect.threshold ?? 0;
+  let killed = 0;
+  [state.player.board, state.opponent.board].forEach((board) => {
+    board.forEach((unit) => {
+      if (!isCreatureInstance(unit, cards)) {
+        return;
+      }
+      if (unit.power >= threshold) {
+        unit.power = 0;
+        killed += 1;
+      }
+    });
+  });
+  handleDeaths(state, cards);
+  const manaGain = effect.mana_gain ?? 0;
+  if (manaGain > 0 && killed > 0) {
+    state.player.mana += manaGain * killed;
   }
 }
 

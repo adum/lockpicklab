@@ -244,6 +244,15 @@
       ]
     },
     {
+      "id": "colossus_bane",
+      "name": "Colossus Bane",
+      "type": "spell",
+      "cost": 3,
+      "effects": [
+        {"type": "execute_threshold", "threshold": 15, "mana_gain": 3}
+      ]
+    },
+    {
       "id": "toxic_mist",
       "name": "Toxic Mist",
       "type": "spell",

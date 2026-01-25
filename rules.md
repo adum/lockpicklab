@@ -60,6 +60,8 @@ Swap Step: swap two creatures on the same board; both become tired.
 
 Echo Step: repeat the last spell you cast (pay +1 extra mana). Cannot repeat Echo Step.
 
+Colossus Bane: destroy all creatures with 15 or more power. Gain 3 mana per creature killed.
+
 Devourer: on play, devour a friendly creature and gain its power. It enters tired and loses 1 power at end of each round.
 
 

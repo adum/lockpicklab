@@ -87,6 +87,12 @@ export interface RepeatLastSpellEffect {
   surcharge?: number;
 }
 
+export interface ExecuteThresholdEffect {
+  type: "execute_threshold";
+  threshold: number;
+  mana_gain?: number;
+}
+
 export interface EndDamageBossEffect {
   type: "end_damage_boss";
   amount: number;
@@ -201,6 +207,7 @@ export type EffectDefinition =
   | NoAttackEffect
   | AnchoredAuraEffect
   | RepeatLastSpellEffect
+  | ExecuteThresholdEffect
   | EndDamageBossEffect
   | SwapPositionsEffect
   | DeathHealBossEffect
