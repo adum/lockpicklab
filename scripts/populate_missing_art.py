@@ -18,6 +18,13 @@ TYPE_DIRS = {
     "mod": PROJECT_ROOT / "ui" / "assets" / "mods",
 }
 
+BOSS_DIR = PROJECT_ROOT / "ui" / "assets" / "boss"
+BOSS_ART = {
+    "Toad Bureaucrat": "toad_dark.jpg",
+    "Clockwork King": "clockwork.jpg",
+    "Ember Colossus": "ember_colossus.jpg",
+}
+
 
 def build_prompt(card: dict) -> str:
     name = card.get("name") or card.get("id", "Unknown")
@@ -54,6 +61,10 @@ def convert_to_jpeg(source: Path, dest: Path) -> None:
         img.save(dest, "JPEG", quality=90, optimize=True)
 
 
+def build_boss_prompt(name: str) -> str:
+    return f"Fantasy boss portrait of {name}, dramatic lighting, ominous atmosphere."
+
+
 def run_generation(prompt: str, output_path: Path, env: dict) -> None:
     cmd = [sys.executable, str(GEN_SCRIPT), prompt, str(output_path)]
     subprocess.run(cmd, check=True, env=env, cwd=str(PROJECT_ROOT))
@@ -80,6 +91,16 @@ def main() -> int:
         default=[],
         help="Optional list of card types to include (creature, spell, effect, mod).",
     )
+    parser.add_argument(
+        "--bosses",
+        action="store_true",
+        help="Also generate missing boss art for known bosses.",
+    )
+    parser.add_argument(
+        "--bosses-only",
+        action="store_true",
+        help="Only generate boss art, skipping card art.",
+    )
     args = parser.parse_args()
 
     if not CARDS_PATH.exists():
@@ -101,40 +122,68 @@ def main() -> int:
 
     generated = 0
     skipped = 0
-    for card in cards:
-        card_type = card.get("type")
-        if card_type not in allowed_types:
-            continue
-        target_dir = TYPE_DIRS.get(card_type)
-        if not target_dir:
-            continue
-        target_dir.mkdir(parents=True, exist_ok=True)
+    if not args.bosses_only:
+        for card in cards:
+            card_type = card.get("type")
+            if card_type not in allowed_types:
+                continue
+            target_dir = TYPE_DIRS.get(card_type)
+            if not target_dir:
+                continue
+            target_dir.mkdir(parents=True, exist_ok=True)
 
-        card_id = card.get("id")
-        if not card_id:
-            continue
-        dest = target_dir / f"{card_id}.jpg"
-        if dest.exists() and not args.force:
-            skipped += 1
-            continue
+            card_id = card.get("id")
+            if not card_id:
+                continue
+            dest = target_dir / f"{card_id}.jpg"
+            if dest.exists() and not args.force:
+                skipped += 1
+                continue
 
-        prompt = build_prompt(card)
-        temp_png = target_dir / f"{card_id}.png"
-        try:
-            run_generation(prompt, temp_png, env)
-            convert_to_jpeg(temp_png, dest)
-            temp_png.unlink(missing_ok=True)
-            generated += 1
-        except Exception as exc:
-            print(f"Failed to generate art for {card_id}: {exc}", file=sys.stderr)
-            if temp_png.exists():
+            prompt = build_prompt(card)
+            temp_png = target_dir / f"{card_id}.png"
+            try:
+                run_generation(prompt, temp_png, env)
+                convert_to_jpeg(temp_png, dest)
                 temp_png.unlink(missing_ok=True)
-            continue
+                generated += 1
+            except Exception as exc:
+                print(f"Failed to generate art for {card_id}: {exc}", file=sys.stderr)
+                if temp_png.exists():
+                    temp_png.unlink(missing_ok=True)
+                continue
 
-        if remaining is not None:
-            remaining -= 1
-            if remaining <= 0:
-                break
+            if remaining is not None:
+                remaining -= 1
+                if remaining <= 0:
+                    break
+
+    if remaining is None or remaining > 0:
+        if args.bosses or args.bosses_only:
+            BOSS_DIR.mkdir(parents=True, exist_ok=True)
+            for boss_name, filename in BOSS_ART.items():
+                dest = BOSS_DIR / filename
+                if dest.exists() and not args.force:
+                    skipped += 1
+                    continue
+
+                prompt = build_boss_prompt(boss_name)
+                temp_png = BOSS_DIR / f"{dest.stem}.png"
+                try:
+                    run_generation(prompt, temp_png, env)
+                    convert_to_jpeg(temp_png, dest)
+                    temp_png.unlink(missing_ok=True)
+                    generated += 1
+                except Exception as exc:
+                    print(f"Failed to generate art for boss {boss_name}: {exc}", file=sys.stderr)
+                    if temp_png.exists():
+                        temp_png.unlink(missing_ok=True)
+                    continue
+
+                if remaining is not None:
+                    remaining -= 1
+                    if remaining <= 0:
+                        break
 
     print(f"Generated: {generated}, skipped: {skipped}")
     return 0

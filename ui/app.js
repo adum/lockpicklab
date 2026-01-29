@@ -489,6 +489,7 @@ const PUZZLE_LIBRARY = [
 const BOSS_ART = {
   "Toad Bureaucrat": "./assets/boss/toad_dark.jpg",
   "Clockwork King": "./assets/boss/clockwork.jpg",
+  "Ember Colossus": "./assets/boss/ember_colossus.jpg",
 };
 
 const CREATURE_ART = {
