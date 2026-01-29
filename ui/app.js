@@ -493,6 +493,11 @@ const BOSS_ART = {
   "Frost Warden": "./assets/boss/frost_warden.jpg",
   "Ironbound Seraph": "./assets/boss/ironbound_seraph.jpg",
   "Gravelord Mycel": "./assets/boss/gravelord_mycel.jpg",
+  "Stormglass Oracle": "./assets/boss/stormglass_oracle.jpg",
+  "Sunken Matron": "./assets/boss/sunken_matron.jpg",
+  "Ashen Pilgrim": "./assets/boss/ashen_pilgrim.jpg",
+  "Brass Leviathan": "./assets/boss/brass_leviathan.jpg",
+  "Hollow Regent": "./assets/boss/hollow_regent.jpg",
 };
 
 const CREATURE_ART = {

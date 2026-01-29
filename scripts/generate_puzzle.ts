@@ -305,6 +305,11 @@ function main() {
     "Frost Warden",
     "Ironbound Seraph",
     "Gravelord Mycel",
+    "Stormglass Oracle",
+    "Sunken Matron",
+    "Ashen Pilgrim",
+    "Brass Leviathan",
+    "Hollow Regent",
   ];
   const bossRng = new Rng(seed ^ 0x9e3779b9);
   const bossName =

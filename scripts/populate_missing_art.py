@@ -26,6 +26,11 @@ BOSS_ART = {
     "Frost Warden": "frost_warden.jpg",
     "Ironbound Seraph": "ironbound_seraph.jpg",
     "Gravelord Mycel": "gravelord_mycel.jpg",
+    "Stormglass Oracle": "stormglass_oracle.jpg",
+    "Sunken Matron": "sunken_matron.jpg",
+    "Ashen Pilgrim": "ashen_pilgrim.jpg",
+    "Brass Leviathan": "brass_leviathan.jpg",
+    "Hollow Regent": "hollow_regent.jpg",
 }
 
 
