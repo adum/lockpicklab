@@ -456,10 +456,9 @@ const elements = {
   genSeed: document.getElementById("gen-seed"),
   genSeedRandom: document.getElementById("gen-seed-random"),
   genHand: document.getElementById("gen-hand"),
-  genMana: document.getElementById("gen-mana"),
+  genHandMin: document.getElementById("gen-hand-min"),
   genDecoys: document.getElementById("gen-decoys"),
   genRounds: document.getElementById("gen-rounds"),
-  genManaRound: document.getElementById("gen-mana-round"),
   genBossMin: document.getElementById("gen-boss-min"),
   genBossMax: document.getElementById("gen-boss-max"),
   genBossMods: document.getElementById("gen-boss-mods"),
@@ -860,10 +859,9 @@ elements.genSeedRandom.addEventListener("change", () => {
 [
   elements.genSeed,
   elements.genHand,
-  elements.genMana,
+  elements.genHandMin,
   elements.genDecoys,
   elements.genRounds,
-  elements.genManaRound,
   elements.genBossMin,
   elements.genBossMax,
   elements.genBossMods,
@@ -955,10 +953,19 @@ function startGenerator() {
   }
   saveGeneratorPrefs();
   const handSize = parseNumber(elements.genHand.value, 4, 1, 8);
-  const manaCap = parseNumber(elements.genMana.value, 10, 1, 20);
+  const minHandSize = parseNumber(
+    elements.genHandMin?.value ?? 0,
+    0,
+    0,
+    8
+  );
+  if (minHandSize > handSize) {
+    setGeneratorNote("Min used cards cannot exceed hand size.");
+    setStatus("Min used cards cannot exceed hand size.", "warn");
+    return;
+  }
   const decoys = parseNumber(elements.genDecoys.value, 0, 0, 6);
   const targetRounds = parseNumber(elements.genRounds.value, 1, 1, 6);
-  const manaPerRound = parseNumber(elements.genManaRound.value, 0, 0, 10);
   const bossMin = parseNumber(elements.genBossMin?.value ?? 0, 0, 0, 6);
   const bossMax = parseNumber(elements.genBossMax?.value ?? 0, 0, 0, 6);
   const bossModsMax = parseNumber(elements.genBossMods?.value ?? 0, 0, 0, 4);
@@ -1004,10 +1011,9 @@ function startGenerator() {
     seed,
     rng,
     handSize,
-    manaCap,
+    minHandSize,
     decoys,
     targetRounds,
-    manaPerRound,
     bossMin: bossMinClamped,
     bossMax: bossMaxClamped,
     bossModsMax,
@@ -1077,6 +1083,10 @@ function stepGenerator(runId = generatorState?.runId) {
     if (attempt.aborted && attempt.rejection === "action_budget") {
       setGeneratorReject(
         `Rejected attempt #${attemptNumber} (action budget exceeded).`
+      );
+    } else if (attempt.rejection === "min_hand") {
+      setGeneratorReject(
+        `Rejected attempt #${attemptNumber} (used hand below minimum).`
       );
     }
     if (!attempt.puzzle) {
@@ -1455,10 +1465,9 @@ function saveGeneratorPrefs() {
     seedRandom: elements.genSeedRandom?.checked ?? true,
     seed: elements.genSeed?.value ?? "",
     hand: elements.genHand?.value ?? "",
-    mana: elements.genMana?.value ?? "",
+    minHand: elements.genHandMin?.value ?? "",
     decoys: elements.genDecoys?.value ?? "",
     rounds: elements.genRounds?.value ?? "",
-    manaRound: elements.genManaRound?.value ?? "",
     bossMin: elements.genBossMin?.value ?? "",
     bossMax: elements.genBossMax?.value ?? "",
     bossMods: elements.genBossMods?.value ?? "",
@@ -1499,17 +1508,14 @@ function loadGeneratorPrefs() {
   if (elements.genHand && typeof prefs.hand === "string") {
     elements.genHand.value = prefs.hand;
   }
-  if (elements.genMana && typeof prefs.mana === "string") {
-    elements.genMana.value = prefs.mana;
+  if (elements.genHandMin && typeof prefs.minHand === "string") {
+    elements.genHandMin.value = prefs.minHand;
   }
   if (elements.genDecoys && typeof prefs.decoys === "string") {
     elements.genDecoys.value = prefs.decoys;
   }
   if (elements.genRounds && typeof prefs.rounds === "string") {
     elements.genRounds.value = prefs.rounds;
-  }
-  if (elements.genManaRound && typeof prefs.manaRound === "string") {
-    elements.genManaRound.value = prefs.manaRound;
   }
   if (elements.genBossMin && typeof prefs.bossMin === "string") {
     elements.genBossMin.value = prefs.bossMin;

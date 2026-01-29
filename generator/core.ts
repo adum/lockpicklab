@@ -337,10 +337,9 @@ export interface GeneratorState {
   seed: number;
   rng: Rng;
   handSize: number;
-  manaCap: number;
+  minHandSize: number;
   decoys: number;
   targetRounds: number;
-  manaPerRound: number;
   bossMin: number;
   bossMax: number;
   bossModsMax: number;
@@ -358,6 +357,103 @@ export interface GeneratorAttemptResult {
   actionCount: number;
   aborted: boolean;
   rejection?: string;
+}
+
+function getRepeatSurcharge(def: CardDefinition | undefined): number {
+  if (!def?.effects) {
+    return 0;
+  }
+  const repeatEffect = def.effects.find(
+    (effect) => effect.type === "repeat_last_spell"
+  );
+  if (!repeatEffect || repeatEffect.type !== "repeat_last_spell") {
+    return 0;
+  }
+  return repeatEffect.surcharge ?? 1;
+}
+
+function getPlayCost(def: CardDefinition | undefined): number {
+  if (!def) {
+    return 0;
+  }
+  return (def.cost ?? 0) + getRepeatSurcharge(def);
+}
+
+function cloneGameState(engine: GeneratorEngine, state: GameState): GameState {
+  const clone =
+    engine.cloneState ??
+    ((input: GameState) =>
+      typeof structuredClone === "function"
+        ? structuredClone(input)
+        : JSON.parse(JSON.stringify(input)));
+  return clone(state);
+}
+
+function deriveManaPlan(
+  ghost: GhostResult,
+  cards: CardLibrary,
+  engine: GeneratorEngine,
+  rng: Rng
+): { startMana: number; manaPerRound: number } {
+  const manaSeed = 1_000_000;
+  let current = cloneGameState(engine, ghost.startState);
+  current.player.mana = manaSeed;
+  current.manaPerRound = 0;
+
+  const constraints: { round: number; required: number }[] = [];
+
+  for (const action of ghost.trace) {
+    if (action.type === "play") {
+      const def = cards.byId[action.card];
+      const requiredCost = getPlayCost(def);
+      const round = current.turn ?? 1;
+      const manaDelta = current.player.mana - manaSeed;
+      const required = requiredCost - manaDelta;
+      constraints.push({ round, required });
+    }
+    current = engine.applyAction(current, action, cards);
+  }
+
+  if (constraints.length === 0) {
+    return { startMana: 0, manaPerRound: 0 };
+  }
+
+  let minStart = 0;
+  for (const constraint of constraints) {
+    if (constraint.round === 1) {
+      minStart = Math.max(minStart, Math.ceil(constraint.required));
+    }
+  }
+  minStart = Math.max(0, minStart);
+
+  let maxManaPerRound = 0;
+  for (const constraint of constraints) {
+    if (constraint.round <= 1) {
+      continue;
+    }
+    const needed = constraint.required - minStart;
+    if (needed <= 0) {
+      continue;
+    }
+    const perRound = Math.ceil(needed / (constraint.round - 1));
+    if (perRound > maxManaPerRound) {
+      maxManaPerRound = perRound;
+    }
+  }
+
+  const manaPerRound = rng.int(maxManaPerRound + 1);
+
+  let startMana = 0;
+  for (const constraint of constraints) {
+    const candidate =
+      constraint.required - (constraint.round - 1) * manaPerRound;
+    if (candidate > startMana) {
+      startMana = candidate;
+    }
+  }
+  startMana = Math.max(0, Math.ceil(startMana));
+
+  return { startMana, manaPerRound };
 }
 
 export function buildPuzzleAttempt(
@@ -384,6 +480,11 @@ export function buildPuzzleAttempt(
     };
   }
 
+  const ghostStartMana = hand.reduce((sum, cardId) => {
+    const def = cards.byId[cardId];
+    return sum + getPlayCost(def);
+  }, 0);
+
   const bossBoard = buildBossBoard(
     state.rng,
     state.creaturePool,
@@ -405,7 +506,7 @@ export function buildPuzzleAttempt(
 
   const startState = engine.normalizeState({
     player: {
-      mana: state.manaCap,
+      mana: ghostStartMana,
       hand,
       board: [],
     },
@@ -414,7 +515,7 @@ export function buildPuzzleAttempt(
       health: 30,
       board: bossBoard,
     },
-    manaPerRound: state.manaPerRound,
+    manaPerRound: 0,
     targetRounds: state.targetRounds,
   });
 
@@ -444,15 +545,36 @@ export function buildPuzzleAttempt(
   }
 
   try {
-    const base = materialize(ghost, cards, {
-      seed: state.seed,
-      targetRounds: state.targetRounds,
-      manaPerRound: state.manaPerRound,
-    });
+    const manaPlan = deriveManaPlan(ghost, cards, engine, state.rng);
+    const materializeStart = cloneGameState(engine, ghost.startState);
+    materializeStart.player.mana = manaPlan.startMana;
+    materializeStart.manaPerRound = manaPlan.manaPerRound;
+    const base = materialize(
+      {
+        ...ghost,
+        startState: materializeStart,
+      },
+      cards,
+      {
+        seed: state.seed,
+        targetRounds: state.targetRounds,
+        manaPerRound: manaPlan.manaPerRound,
+      }
+    );
+    const minHandSize = state.minHandSize ?? 0;
+    if (minHandSize > 0 && base.player.hand.length < minHandSize) {
+      return {
+        hand,
+        handLabel,
+        actionCount,
+        aborted: false,
+        rejection: "min_hand",
+      };
+    }
     if (state.targetRounds > 1) {
       const baseCost = base.player.hand.reduce((sum, cardId) => {
         const def = cards.byId[cardId];
-        return sum + (def?.cost ?? 0);
+        return sum + getPlayCost(def);
       }, 0);
       if (baseCost <= base.player.mana) {
         return {

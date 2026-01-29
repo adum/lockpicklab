@@ -16,17 +16,16 @@ import type { Puzzle } from "../engine/types";
 const DEFAULTS = {
   seed: Date.now(),
   handSize: 4,
-  manaCap: 10,
+  minHandSize: 0,
   decoys: 0,
   targetRounds: 1,
-  manaPerRound: 0,
   bossMin: 0,
   bossMax: 0,
   bossModsMax: 0,
   actionBudget: 200,
-  solverBudget: 75000,
+  solverBudget: 0,
   maxSolutions: 1,
-  maxAttempts: 50,
+  maxAttempts: 0,
 } as const;
 
 const USAGE = `
@@ -36,10 +35,9 @@ Usage:
 Options:
   --seed <n>                RNG seed (default: now)
   --hand-size <n>           Hand size (default: ${DEFAULTS.handSize})
-  --mana <n>                Starting mana (default: ${DEFAULTS.manaCap})
+  --min-hand-size <n>       Minimum used cards in solution (default: ${DEFAULTS.minHandSize})
   --decoys <n>              Extra decoy cards added to the hand (default: ${DEFAULTS.decoys})
   --target-rounds <n>       Target rounds to solve (default: ${DEFAULTS.targetRounds})
-  --mana-per-round <n>      Mana gained at end of each round (default: ${DEFAULTS.manaPerRound})
   --boss-min <n>            Minimum boss creatures (default: ${DEFAULTS.bossMin})
   --boss-max <n>            Maximum boss creatures (default: ${DEFAULTS.bossMax})
   --boss-mods <n>           Max mods per boss creature (default: ${DEFAULTS.bossModsMax})
@@ -47,7 +45,7 @@ Options:
   --action-budget <n>       Max ghost actions per attempt (0 = infinite; default: ${DEFAULTS.actionBudget})
   --solver-budget <n>       Max solver nodes (0 = infinite; default: ${DEFAULTS.solverBudget})
   --max-solutions <n>       Reject if more than N solutions (0 = no cap; default: ${DEFAULTS.maxSolutions})
-  --max-attempts <n>        Attempts before giving up (default: ${DEFAULTS.maxAttempts})
+  --max-attempts <n>        Attempts before giving up (0 = infinite; default: ${DEFAULTS.maxAttempts})
   --verbose                 Print attempt/rejection reasons
 `.trim();
 
@@ -119,10 +117,9 @@ function main() {
   const allowedFlags = new Set([
     "seed",
     "hand-size",
-    "mana",
+    "min-hand-size",
     "decoys",
     "target-rounds",
-    "mana-per-round",
     "boss-min",
     "boss-max",
     "boss-mods",
@@ -158,13 +155,15 @@ function main() {
     "hand-size",
     1
   );
-  const manaCap = parseNumberValue(
-    pickFlag(flags, ["mana"]),
-    DEFAULTS.manaCap,
-    "mana",
-    1
+  const minHandSize = parseNumberValue(
+    pickFlag(flags, ["min-hand-size"]),
+    DEFAULTS.minHandSize,
+    "min-hand-size",
+    0
   );
-
+  if (minHandSize > handSize) {
+    throw new Error("--min-hand-size cannot exceed --hand-size.");
+  }
   const decoys = parseNumberValue(
     pickFlag(flags, ["decoys"]),
     DEFAULTS.decoys,
@@ -176,12 +175,6 @@ function main() {
     DEFAULTS.targetRounds,
     "target-rounds",
     1
-  );
-  const manaPerRound = parseNumberValue(
-    pickFlag(flags, ["mana-per-round"]),
-    DEFAULTS.manaPerRound,
-    "mana-per-round",
-    0
   );
   const bossMin = parseNumberValue(
     pickFlag(flags, ["boss-min"]),
@@ -226,12 +219,14 @@ function main() {
   );
   const maxSolutions =
     maxSolutionsRaw === 0 ? Number.POSITIVE_INFINITY : maxSolutionsRaw;
-  const maxAttempts = parseNumberValue(
+  const maxAttemptsRaw = parseNumberValue(
     pickFlag(flags, ["max-attempts"]),
     DEFAULTS.maxAttempts,
     "max-attempts",
-    1
+    0
   );
+  const maxAttempts =
+    maxAttemptsRaw === 0 ? Number.POSITIVE_INFINITY : maxAttemptsRaw;
   const bossNameRaw = pickFlag(flags, ["boss-name"]);
   const bossNameOverride =
     typeof bossNameRaw === "string" ? bossNameRaw.trim() : "";
@@ -257,10 +252,9 @@ function main() {
     seed,
     rng,
     handSize,
-    manaCap,
+    minHandSize,
     decoys,
     targetRounds,
-    manaPerRound,
     bossMin,
     bossMax,
     bossModsMax,
@@ -298,6 +292,7 @@ function main() {
           no_actions: "no legal actions",
           materialize: "materialize failed",
           early_mana: "hand is affordable too early",
+          min_hand: "used hand smaller than minimum",
         };
         const label = rejectionLabels[attempt.rejection] ?? attempt.rejection;
         console.log(`Rejected attempt #${attempts} (${label}).`);
