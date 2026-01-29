@@ -2,7 +2,8 @@
   "name": "card-puzzle",
   "private": true,
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "build:ui-gen": "tsc -p tsconfig.generator-ui.json"
   },
   "devDependencies": {
     "typescript": "^5.4.0"

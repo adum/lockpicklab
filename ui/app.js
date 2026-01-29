@@ -1,10 +1,19 @@
 import {
   applyAction,
   buildCardLibrary,
+  cloneState,
   getLegalActions,
   isWin,
   normalizeState,
 } from "./engine.js";
+import {
+  Rng,
+  buildGeneratorPools,
+  buildPuzzleAttempt,
+  createSolveState,
+  stepSolve,
+  isBossModAllowed,
+} from "./gen/generator/core.js";
 import { initTooltips } from "./tooltip.js";
 import { KEYWORD_TOOLTIPS, formatKeyword } from "./keywords.js";
 
@@ -550,31 +559,14 @@ const GENERATOR_PREFS_KEY = "lockpick.generatorPrefs";
 const GENERATOR_MAX_GHOST_ACTIONS = 200;
 const GENERATOR_MAX_SOLVER_NODES = 75000;
 
-class Rng {
-  constructor(seed) {
-    this.state = seed >>> 0;
-  }
-
-  next() {
-    let t = (this.state += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  }
-
-  int(max) {
-    if (max <= 0) {
-      return 0;
-    }
-    return Math.floor(this.next() * max);
-  }
-
-  pick(items) {
-    return items[this.int(items.length)];
-  }
-}
-
 let cardLibrary = buildCardLibrary(fallbackCards);
+const generatorEngine = {
+  applyAction,
+  getLegalActions,
+  isWin,
+  normalizeState,
+  cloneState,
+};
 let currentPuzzle = structuredClone(defaultPuzzle);
 let initialState = normalizeState({
   player: currentPuzzle.player,
@@ -1000,20 +992,9 @@ function startGenerator() {
     bossNames.length > 0
       ? bossRng.pick(bossNames)
       : currentPuzzle.opponent?.name ?? "Toad Bureaucrat";
-  const playable = Object.values(cardLibrary.byId).filter(
-    (card) =>
-      card.type === "creature" ||
-      card.type === "spell" ||
-      card.type === "effect" ||
-      card.type === "mod"
-  );
-  const creaturePool = Object.values(cardLibrary.byId).filter(
-    (card) => card.type === "creature"
-  );
-  const bossModPool = Object.values(cardLibrary.byId)
-    .filter((card) => card.type === "mod")
-    .filter((card) => isBossModAllowed(card))
-    .map((card) => card.id);
+  const { playable, creaturePool, bossModPool } = buildGeneratorPools(cardLibrary, {
+    bossModFilter: isBossModAllowed,
+  });
 
   generatorCancel = false;
   generatorRunId += 1;
@@ -1081,13 +1062,28 @@ function stepGenerator(runId = generatorState?.runId) {
     }
     setGeneratorNote("Generating candidates…");
     const attemptNumber = generatorState.attempts + 1;
-    const puzzle = buildPuzzleAttempt(generatorState, attemptNumber);
+    const attempt = buildPuzzleAttempt(generatorState, cardLibrary, generatorEngine);
     generatorState.attempts += 1;
     updateGeneratorUI({ running: true });
-    if (!puzzle) {
+    const actionSuffix =
+      attempt.actionCount > 0 || attempt.aborted
+        ? attempt.aborted
+          ? ` (actions: ${attempt.actionCount}, budget)`
+          : ` (actions: ${attempt.actionCount})`
+        : "";
+    setGeneratorAttemptLine(
+      `Attempt #${attemptNumber}: ${attempt.handLabel}${actionSuffix}`
+    );
+    if (attempt.aborted && attempt.rejection === "action_budget") {
+      setGeneratorReject(
+        `Rejected attempt #${attemptNumber} (action budget exceeded).`
+      );
+    }
+    if (!attempt.puzzle) {
       iterations += 1;
       continue;
     }
+    const puzzle = attempt.puzzle;
     const shouldSolve =
       generatorState.enforceSolutionCap || generatorState.enforceEarlyWin;
     if (!shouldSolve) {
@@ -1102,123 +1098,15 @@ function stepGenerator(runId = generatorState?.runId) {
   window.setTimeout(() => stepGenerator(runId), 0);
 }
 
-function buildPuzzleAttempt(state, attemptNumber) {
-  const hand = pickHand(state.rng, state.playable, state.handSize);
-  const handLabel = hand
-    .map((cardId) => cardLibrary.byId[cardId]?.name ?? cardId)
-    .join(", ");
-  setGeneratorAttemptLine(
-    `Attempt #${attemptNumber}: ${handLabel}`
-  );
-  const handTypes = new Set(
-    hand
-      .map((cardId) => cardLibrary.byId[cardId]?.type)
-      .filter((type) => Boolean(type))
-  );
-  if (handTypes.size <= 1) {
-    return null;
-  }
-  const bossBoard = buildBossBoard(
-    state.rng,
-    state.creaturePool,
-    state.bossMin,
-    state.bossMax,
-    state.bossModPool,
-    state.bossModsMax
-  );
-  if (!bossBoard) {
-    return null;
-  }
-  const startState = normalizeState({
-    player: {
-      mana: state.manaCap,
-      hand,
-      board: [],
-    },
-    opponent: {
-      name: state.bossName,
-      health: 30,
-      board: bossBoard,
-    },
-    manaPerRound: state.manaPerRound,
-    targetRounds: state.targetRounds,
-  });
-
-  const ghost = ghostWalk(
-    startState,
-    state.rng,
-    state.targetRounds,
-    state.actionBudget
-  );
-  const actionCount = ghost.trace.length;
-  const actionSuffix = ghost.aborted
-    ? ` (actions: ${actionCount}, budget)`
-    : ` (actions: ${actionCount})`;
-  setGeneratorAttemptLine(
-    `Attempt #${attemptNumber}: ${handLabel}${actionSuffix}`
-  );
-  if (ghost.aborted) {
-    setGeneratorReject(
-      `Rejected attempt #${attemptNumber} (action budget exceeded).`
-    );
-    return null;
-  }
-  if (ghost.trace.length === 0) {
-    return null;
-  }
-  try {
-    const base = materializeGhost(
-      ghost,
-      state.seed,
-      state.targetRounds,
-      state.manaPerRound
-    );
-    if (state.targetRounds > 1) {
-      const baseCost = base.player.hand.reduce((sum, cardId) => {
-        const def = cardLibrary.byId[cardId];
-        return sum + (def?.cost ?? 0);
-      }, 0);
-      if (baseCost <= base.player.mana) {
-        return null;
-      }
-    }
-    const puzzle =
-      state.decoys > 0
-        ? addDecoys(base, state.rng, state.playable, state.decoys)
-        : base;
-    const handTypes = new Set(
-      puzzle.player.hand
-        .map((cardId) => cardLibrary.byId[cardId]?.type)
-        .filter((type) => Boolean(type))
-    );
-    if (handTypes.size <= 1) {
-      return null;
-    }
-    return puzzle;
-  } catch {
-    return null;
-  }
-}
-
 function startGeneratorSolve(puzzle) {
   if (!generatorState) {
     return;
   }
-  const startState = normalizeState({
-    player: puzzle.player,
-    opponent: puzzle.opponent,
-    manaPerRound: puzzle.manaPerRound ?? 0,
-    targetRounds: puzzle.targetRounds,
-  });
-  generatorState.solveState = {
+  generatorState.solveState = createSolveState(
     puzzle,
-    startState,
-    wins: 0,
-    visited: 0,
-    maxNodes: generatorState.solverBudget ?? GENERATOR_MAX_SOLVER_NODES,
-    seen: new Map(),
-    stack: [{ state: startState, depth: 0 }],
-  };
+    generatorEngine,
+    generatorState.solverBudget ?? GENERATOR_MAX_SOLVER_NODES
+  );
   const attempt = generatorState.attempts;
   const nodeLimitLabel =
     generatorState.solveState.maxNodes === Number.POSITIVE_INFINITY
@@ -1233,105 +1121,47 @@ function stepGeneratorSolve(runId = generatorState?.runId) {
   if (!generatorState?.solveState || generatorState.runId !== runId) {
     return;
   }
-  const solver = generatorState.solveState;
-  let iterations = 0;
-
-  while (solver.stack.length > 0 && iterations < 250) {
-    if (generatorCancel) {
-      finalizeGenerator(true);
-      return;
-    }
-
-    const node = solver.stack.pop();
-    solver.visited += 1;
-    if (
-      solver.maxNodes !== Number.POSITIVE_INFINITY &&
-      solver.visited >= solver.maxNodes
-    ) {
-      finalizeGenerator(
-        false,
-        solver.puzzle,
-        solver.wins,
-        `solver budget hit at ${solver.visited} steps`
-      );
-      return;
-    }
-
-    if (isWin(node.state)) {
-      if (
-        generatorState.enforceEarlyWin &&
-        isEarlyWin(node.state, generatorState.targetRounds)
-      ) {
-        setGeneratorReject(
-          `Rejected attempt #${generatorState.attempts} (early win).`
-        );
-        generatorState.solveState = null;
-        window.setTimeout(() => stepGenerator(runId), 0);
-        return;
-      }
-      solver.wins += 1;
-      if (
-        generatorState.enforceSolutionCap &&
-        solver.wins > generatorState.maxSolutions
-      ) {
-        setGeneratorReject(
-          `Rejected attempt #${generatorState.attempts} (${solver.wins} solutions).`
-        );
-        generatorState.solveState = null;
-        window.setTimeout(() => stepGenerator(runId), 0);
-        return;
-      }
-      iterations += 1;
-      continue;
-    }
-
-    if (isPastRoundLimit(node.state)) {
-      iterations += 1;
-      continue;
-    }
-
-    if (node.depth >= solver.maxDepth) {
-      iterations += 1;
-      continue;
-    }
-
-    const key = JSON.stringify(node.state);
-    const prevDepth = solver.seen.get(key);
-    if (prevDepth !== undefined && prevDepth <= node.depth) {
-      iterations += 1;
-      continue;
-    }
-    solver.seen.set(key, node.depth);
-
-    const actions = getLegalActions(node.state, cardLibrary);
-    for (let i = actions.length - 1; i >= 0; i -= 1) {
-      const action = actions[i];
-      if (action.type === "end" && isFinalRoundForSolver(node.state)) {
-        continue;
-      }
-      try {
-        const next = applyAction(node.state, action, cardLibrary);
-        solver.stack.push({
-          state: next,
-          depth: node.depth + 1,
-        });
-      } catch {
-        continue;
-      }
-    }
-
-    iterations += 1;
+  if (generatorCancel) {
+    finalizeGenerator(true);
+    return;
   }
+  const solver = generatorState.solveState;
+  const result = stepSolve(solver, cardLibrary, generatorEngine, {
+    iterationLimit: 250,
+    enforceEarlyWin: generatorState.enforceEarlyWin,
+    targetRounds: generatorState.targetRounds,
+    enforceSolutionCap: generatorState.enforceSolutionCap,
+    maxSolutions: generatorState.maxSolutions,
+  });
 
-  if (solver.stack.length === 0) {
-    if (
-      solver.wins > 0 &&
-      (!generatorState.enforceSolutionCap ||
-        solver.wins <= generatorState.maxSolutions)
-    ) {
-      finalizeGenerator(false, solver.puzzle, solver.wins);
-      return;
+  if (result.status === "budget") {
+    finalizeGenerator(
+      false,
+      solver.puzzle,
+      solver.wins,
+      `solver budget hit at ${solver.visited} steps`
+    );
+    return;
+  }
+  if (result.status === "reject") {
+    if (result.reason === "early_win") {
+      setGeneratorReject(
+        `Rejected attempt #${generatorState.attempts} (early win).`
+      );
+    } else {
+      setGeneratorReject(
+        `Rejected attempt #${generatorState.attempts} (${solver.wins} solutions).`
+      );
     }
+    generatorState.solveState = null;
+    window.setTimeout(() => stepGenerator(runId), 0);
+    return;
+  }
+  if (result.status === "success") {
+    finalizeGenerator(false, solver.puzzle, solver.wins);
+    return;
+  }
+  if (result.status === "exhausted") {
     generatorState.solveState = null;
     window.setTimeout(() => stepGenerator(runId), 0);
     return;
@@ -1417,18 +1247,6 @@ function setGeneratorReject(message) {
   }
   elements.genReject.textContent = message;
 }
-
-function isEarlyWin(state, targetRounds) {
-  const rounds =
-    typeof targetRounds === "number"
-      ? targetRounds
-      : Number(targetRounds ?? 0);
-  if (!Number.isFinite(rounds) || rounds <= 1) {
-    return false;
-  }
-  return state.turn < rounds;
-}
-
 
 function estimateMaxDepth(state) {
   const roundsRaw = state.targetRounds;
@@ -1712,259 +1530,6 @@ function loadGeneratorPrefs() {
     elements.genSolverBudget.value = prefs.solverBudget;
   }
   updateGeneratorSeedInput();
-}
-
-function pickHand(rng, pool, count) {
-  const hand = [];
-  for (let i = 0; i < count; i += 1) {
-    const pick = rng.pick(pool);
-    hand.push(pick.id);
-  }
-  return hand;
-}
-
-function buildBossBoard(rng, pool, minCount, maxCount, modPool, modsMax) {
-  const min = Math.max(0, minCount ?? 0);
-  const max = Math.max(min, maxCount ?? 0);
-  if (!Array.isArray(pool) || pool.length === 0) {
-    return min > 0 ? null : [];
-  }
-  if (max <= 0) {
-    return min > 0 ? null : [];
-  }
-  const range = max - min;
-  const count = min + rng.int(range + 1);
-  const board = [];
-  for (let i = 0; i < count; i += 1) {
-    const pick = rng.pick(pool);
-    if (!pick?.stats) {
-      continue;
-    }
-    const instance = {
-      card: pick.id,
-      power: pick.stats.power,
-      keywords: pick.keywords ? [...pick.keywords] : [],
-      mods: [],
-      tired: false,
-      poison: 0,
-      shield: 0,
-      rebirths: 0,
-    };
-    applyBossMods(instance, rng, modPool, modsMax);
-    board.push(instance);
-  }
-  return board;
-}
-
-function applyBossMods(instance, rng, modPool, modsMax) {
-  const maxMods = Math.max(0, modsMax ?? 0);
-  if (!Array.isArray(modPool) || modPool.length === 0 || maxMods <= 0) {
-    return;
-  }
-  const cap = Math.min(maxMods, modPool.length);
-  const count = rng.int(cap + 1);
-  if (count <= 0) {
-    return;
-  }
-  const available = [...modPool];
-  for (let i = 0; i < count; i += 1) {
-    if (available.length === 0) {
-      break;
-    }
-    const pick = rng.pick(available);
-    const index = available.indexOf(pick);
-    if (index >= 0) {
-      available.splice(index, 1);
-    }
-    const def = cardLibrary.byId?.[pick];
-    if (!def || def.type !== "mod") {
-      continue;
-    }
-    applyModEffects(instance, def);
-  }
-}
-
-function applyModEffects(target, def) {
-  const effects = def.effects ?? [];
-  effects.forEach((effect) => {
-    if (effect.type === "buff") {
-      if (effect.stat === "power") {
-        target.power += effect.amount;
-      }
-    }
-    if (effect.type === "shield") {
-      target.shield = (target.shield ?? 0) + (effect.amount ?? 1);
-    }
-    if (effect.type === "grant_keyword") {
-      if (!target.keywords.includes(effect.keyword)) {
-        target.keywords.push(effect.keyword);
-      }
-    }
-  });
-  target.mods = target.mods ?? [];
-  target.mods.push(def.id);
-}
-
-function isBossModAllowed(card) {
-  if (!card || card.type !== "mod") {
-    return false;
-  }
-  return !(card.effects ?? []).some((effect) => {
-    if (effect.type === "death_damage_boss") {
-      return true;
-    }
-    if (effect.type === "grant_keyword" && effect.keyword === "pierce") {
-      return true;
-    }
-    return false;
-  });
-}
-
-function ghostWalk(startState, rng, targetRounds, maxActions) {
-  let current = structuredClone(startState);
-  const trace = [];
-  const roundsRaw = targetRounds ?? startState.targetRounds;
-  const rounds =
-    typeof roundsRaw === "number" && Number.isFinite(roundsRaw)
-      ? roundsRaw
-      : Number(roundsRaw) || 1;
-  const seen = new Set();
-  const actionLimit =
-    Number.isFinite(maxActions) && maxActions > 0
-      ? maxActions
-      : GENERATOR_MAX_GHOST_ACTIONS;
-
-  while (true) {
-    const key = JSON.stringify(current);
-    if (seen.has(key)) {
-      break;
-    }
-    seen.add(key);
-
-    const actions = getLegalActions(current, cardLibrary);
-    const nonEnd = actions.filter((action) => action.type !== "end");
-    const endActions = actions.filter((action) => action.type === "end");
-    let allowed = [];
-
-    if (rounds <= 1 || current.turn >= rounds) {
-      allowed = nonEnd;
-    } else if (nonEnd.length > 0) {
-      allowed = nonEnd;
-    } else {
-      allowed = endActions;
-    }
-
-    if (allowed.length === 0) {
-      break;
-    }
-
-    let options = [];
-    for (const action of allowed) {
-      try {
-        const next = applyAction(current, action, cardLibrary);
-        const nextKey = JSON.stringify(next);
-        if (nextKey === key || seen.has(nextKey)) {
-          continue;
-        }
-        options.push({ action, next });
-      } catch {
-        continue;
-      }
-    }
-
-    if (
-      options.length === 0 &&
-      allowed !== endActions &&
-      rounds > 1 &&
-      current.turn < rounds &&
-      endActions.length > 0
-    ) {
-      for (const action of endActions) {
-        try {
-          const next = applyAction(current, action, cardLibrary);
-          const nextKey = JSON.stringify(next);
-          if (nextKey === key || seen.has(nextKey)) {
-            continue;
-          }
-          options.push({ action, next });
-        } catch {
-          continue;
-        }
-      }
-    }
-
-    if (options.length === 0) {
-      break;
-    }
-
-    const pick = rng.pick(options);
-    current = pick.next;
-    trace.push(pick.action);
-    if (trace.length >= actionLimit) {
-      return { trace, startState, endState: current, aborted: true };
-    }
-  }
-
-  return { trace, startState, endState: current };
-}
-
-function materializeGhost(ghost, seed, targetRounds, manaPerRound) {
-  const usedCards = ghost.trace
-    .filter((action) => action.type === "play")
-    .map((action) => action.card);
-  const manaSpent = usedCards.reduce((sum, cardId) => {
-    const def = cardLibrary.byId[cardId];
-    return sum + (def?.cost ?? 0);
-  }, 0);
-  const startingMana =
-    ghost.startState?.player?.mana ?? manaSpent;
-  const actionCount = ghost.trace.length;
-
-  const damage = ghost.startState.opponent.health - ghost.endState.opponent.health;
-  if (damage <= 0) {
-    throw new Error("No damage dealt.");
-  }
-
-  const tags = new Set();
-  usedCards.forEach((cardId) => {
-    const def = cardLibrary.byId[cardId];
-    def?.keywords?.forEach((kw) => tags.add(kw));
-  });
-
-  return {
-    id: `puzzle_${seed}`,
-    difficulty: actionCount >= 5 ? "hard" : actionCount >= 3 ? "medium" : "easy",
-    seed,
-    tags: Array.from(tags),
-    targetRounds,
-    manaPerRound,
-    player: {
-      mana: startingMana,
-      hand: usedCards,
-      board: [],
-    },
-    opponent: {
-      name: ghost.startState.opponent.name ?? "Boss",
-      health: Math.max(1, damage),
-      board: ghost.startState.opponent.board ?? [],
-    },
-    solution: ghost.trace,
-  };
-}
-
-function addDecoys(puzzle, rng, pool, extra) {
-  const hand = [...puzzle.player.hand];
-  for (let i = 0; i < extra; i += 1) {
-    const pick = rng.pick(pool);
-    hand.push(pick.id);
-  }
-  return {
-    ...puzzle,
-    player: {
-      ...puzzle.player,
-      hand,
-    },
-  };
 }
 
 elements.stepSolution.addEventListener("click", () => {
