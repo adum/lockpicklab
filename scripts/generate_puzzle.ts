@@ -277,6 +277,7 @@ function main() {
   const enforceSolutionCap = Number.isFinite(maxSolutions);
   const enforceEarlyWin = targetRounds > 1;
   const shouldSolve = enforceSolutionCap || enforceEarlyWin;
+  const rejectionCounts: Record<string, number> = {};
 
   while (!puzzle && attempts < maxAttempts) {
     attempts += 1;
@@ -303,6 +304,10 @@ function main() {
         };
         const label = rejectionLabels[attempt.rejection] ?? attempt.rejection;
         console.log(`Rejected attempt #${attempts} (${label}).`);
+      }
+      if (attempt.rejection) {
+        rejectionCounts[attempt.rejection] =
+          (rejectionCounts[attempt.rejection] ?? 0) + 1;
       }
       continue;
     }
@@ -351,6 +356,12 @@ function main() {
           console.log(`Rejected attempt #${attempts} (no solutions).`);
         }
       }
+      if (result.status === "reject") {
+        const key = result.reason === "early_win" ? "early_win" : "solution_cap";
+        rejectionCounts[key] = (rejectionCounts[key] ?? 0) + 1;
+      } else if (result.status === "exhausted") {
+        rejectionCounts.no_solutions = (rejectionCounts.no_solutions ?? 0) + 1;
+      }
       break;
     }
   }
@@ -366,6 +377,31 @@ function main() {
     throw new Error("Failed to generate a valid puzzle.");
   }
 
+  if (verbose) {
+    const summaryLabels: Record<string, string> = {
+      hand_types: "Hand had a single card type",
+      boss_board: "Boss board generation failed",
+      action_budget: "Action budget exceeded",
+      no_actions: "No legal actions",
+      materialize: "Materialize failed",
+      early_mana: "Hand is affordable too early",
+      min_hand: "Used hand smaller than minimum",
+      early_win: "Early win",
+      solution_cap: "Too many solutions",
+      no_solutions: "No solutions",
+    };
+    const entries = Object.entries(rejectionCounts);
+    if (entries.length > 0) {
+      console.log("Rejection summary:");
+      entries.forEach(([key, count]) => {
+        if (!count) {
+          return;
+        }
+        const label = summaryLabels[key] ?? key;
+        console.log(`- ${label}: ${count}`);
+      });
+    }
+  }
   const json = JSON.stringify(puzzle, null, 2);
   console.log(json);
 }

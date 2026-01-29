@@ -1658,8 +1658,13 @@ function render() {
       Number(totalRounds) - (currentState.turn - 1),
       0
     );
-    elements.roundsLeft.textContent =
-      roundsLeft === 1 ? "Final round" : String(roundsLeft);
+    if (roundsLeft <= 1) {
+      elements.roundsLeft.textContent = "Final round";
+    } else {
+      const beforeFinal = Math.max(roundsLeft - 1, 0);
+      elements.roundsLeft.textContent =
+        beforeFinal === 1 ? "1 round left" : `${beforeFinal} rounds left`;
+    }
   } else {
     elements.roundsLeft.textContent = "—";
   }
