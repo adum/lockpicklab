@@ -23,6 +23,9 @@ BOSS_ART = {
     "Toad Bureaucrat": "toad_dark.jpg",
     "Clockwork King": "clockwork.jpg",
     "Ember Colossus": "ember_colossus.jpg",
+    "Frost Warden": "frost_warden.jpg",
+    "Ironbound Seraph": "ironbound_seraph.jpg",
+    "Gravelord Mycel": "gravelord_mycel.jpg",
 }
 
 

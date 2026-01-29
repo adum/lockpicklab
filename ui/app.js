@@ -490,6 +490,9 @@ const BOSS_ART = {
   "Toad Bureaucrat": "./assets/boss/toad_dark.jpg",
   "Clockwork King": "./assets/boss/clockwork.jpg",
   "Ember Colossus": "./assets/boss/ember_colossus.jpg",
+  "Frost Warden": "./assets/boss/frost_warden.jpg",
+  "Ironbound Seraph": "./assets/boss/ironbound_seraph.jpg",
+  "Gravelord Mycel": "./assets/boss/gravelord_mycel.jpg",
 };
 
 const CREATURE_ART = {

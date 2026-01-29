@@ -234,7 +234,14 @@ function main() {
   const cardsPath = path.resolve("cards/cards.json");
   const cards = loadCardLibrary(cardsPath);
   const rng = new Rng(seed);
-  const bossPool = ["Toad Bureaucrat", "Clockwork King", "Ember Colossus"];
+  const bossPool = [
+    "Toad Bureaucrat",
+    "Clockwork King",
+    "Ember Colossus",
+    "Frost Warden",
+    "Ironbound Seraph",
+    "Gravelord Mycel",
+  ];
   const bossRng = new Rng(seed ^ 0x9e3779b9);
   const bossName =
     bossNameOverride ||
