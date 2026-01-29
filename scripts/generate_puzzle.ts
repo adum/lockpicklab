@@ -1,3 +1,4 @@
+import fs from "fs";
 import path from "path";
 import { loadCardLibrary } from "../engine/cards";
 import { cloneState, normalizeState } from "../engine/state";
@@ -46,6 +47,7 @@ Options:
   --solver-budget <n>       Max solver nodes (0 = infinite; default: ${DEFAULTS.solverBudget})
   --max-solutions <n>       Reject if more than N solutions (0 = no cap; default: ${DEFAULTS.maxSolutions})
   --max-attempts <n>        Attempts before giving up (0 = infinite; default: ${DEFAULTS.maxAttempts})
+  --output <path>           Also write puzzle JSON to this path
   --verbose                 Print attempt/rejection reasons
 `.trim();
 
@@ -192,6 +194,7 @@ function main() {
     "solver-budget",
     "max-solutions",
     "max-attempts",
+    "output",
     "verbose",
     "v",
     "help",
@@ -294,6 +297,11 @@ function main() {
   const bossNameRaw = pickFlag(flags, ["boss-name"]);
   const bossNameOverride =
     typeof bossNameRaw === "string" ? bossNameRaw.trim() : "";
+  const outputPathRaw = pickFlag(flags, ["output"]);
+  const outputPath =
+    typeof outputPathRaw === "string" && outputPathRaw.trim().length > 0
+      ? outputPathRaw.trim()
+      : "";
 
   const cardsPath = path.resolve("cards/cards.json");
   const cards = loadCardLibrary(cardsPath);
@@ -472,6 +480,9 @@ function main() {
     }
   }
   const json = JSON.stringify(stripBossDefaults(puzzle), null, 2);
+  if (outputPath) {
+    fs.writeFileSync(path.resolve(outputPath), json, "utf8");
+  }
   console.log(json);
 }
 
