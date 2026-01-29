@@ -11,7 +11,7 @@ import {
   stepSolve,
 } from "../generator/generator";
 import { applyAction, getLegalActions, isWin } from "../engine/engine";
-import type { Puzzle } from "../engine/types";
+import type { CardInstance, Puzzle } from "../engine/types";
 
 const DEFAULTS = {
   seed: Date.now(),
@@ -106,6 +106,70 @@ function parseNumberValue(
     return Math.max(min, parsed);
   }
   return parsed;
+}
+
+function stripBossDefaults(puzzle: Puzzle): Puzzle {
+  const opponent = puzzle.opponent;
+  const board = Array.isArray(opponent?.board) ? opponent.board : [];
+  const trimmed = board.map((unit) => {
+    const next: CardInstance = {
+      uid: unit.uid,
+      card: unit.card,
+      power: unit.power,
+      keywords: Array.isArray(unit.keywords) ? unit.keywords : [],
+      mods: Array.isArray(unit.mods) ? unit.mods : [],
+      tired: Boolean(unit.tired),
+      poison: unit.poison ?? 0,
+      shield: unit.shield ?? 0,
+      rebirths: unit.rebirths ?? 0,
+      counter: unit.counter ?? 0,
+      borrowed: unit.borrowed ?? false,
+      borrowedMultiplier: unit.borrowedMultiplier ?? 0,
+      anchoredBonus: unit.anchoredBonus ?? 0,
+    };
+    const mutable = next as Partial<CardInstance>;
+    if (!next.uid) {
+      delete mutable.uid;
+    }
+    if (!next.keywords.length) {
+      delete mutable.keywords;
+    }
+    if (!next.mods.length) {
+      delete mutable.mods;
+    }
+    if (!next.tired) {
+      delete mutable.tired;
+    }
+    if (!next.poison) {
+      delete mutable.poison;
+    }
+    if (!next.shield) {
+      delete mutable.shield;
+    }
+    if (!next.rebirths) {
+      delete mutable.rebirths;
+    }
+    if (!next.counter) {
+      delete mutable.counter;
+    }
+    if (!next.borrowed) {
+      delete mutable.borrowed;
+    }
+    if (!next.borrowedMultiplier) {
+      delete mutable.borrowedMultiplier;
+    }
+    if (!next.anchoredBonus) {
+      delete mutable.anchoredBonus;
+    }
+    return next;
+  });
+  return {
+    ...puzzle,
+    opponent: {
+      ...opponent,
+      board: trimmed,
+    },
+  };
 }
 
 function main() {
@@ -402,7 +466,7 @@ function main() {
       });
     }
   }
-  const json = JSON.stringify(puzzle, null, 2);
+  const json = JSON.stringify(stripBossDefaults(puzzle), null, 2);
   console.log(json);
 }
 

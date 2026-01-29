@@ -1,13 +1,15 @@
 import { CardInstance, GameState, OpponentState, SideState } from "./types";
 
 function cloneInstance(instance: CardInstance): CardInstance {
+  const keywords = Array.isArray(instance.keywords) ? instance.keywords : [];
+  const mods = Array.isArray(instance.mods) ? instance.mods : [];
   return {
     uid: instance.uid,
     card: instance.card,
-    power: instance.power,
-    keywords: [...instance.keywords],
-    mods: [...instance.mods],
-    tired: instance.tired,
+    power: Number.isFinite(instance.power) ? instance.power : 0,
+    keywords: [...keywords],
+    mods: [...mods],
+    tired: Boolean(instance.tired),
     poison: instance.poison ?? 0,
     shield: instance.shield ?? 0,
     rebirths: instance.rebirths ?? 0,

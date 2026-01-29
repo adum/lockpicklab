@@ -431,7 +431,7 @@ export function buildPuzzleAttempt(state, cards, engine) {
         };
     }
 }
-export function createSolveState(puzzle, engine, maxNodes) {
+export function createSolveState(puzzle, engine, maxNodes, maxSeen = 200000) {
     const startState = engine.normalizeState({
         player: puzzle.player,
         opponent: puzzle.opponent,
@@ -444,6 +444,7 @@ export function createSolveState(puzzle, engine, maxNodes) {
         wins: 0,
         visited: 0,
         maxNodes,
+        maxSeen: maxSeen === 0 ? Number.POSITIVE_INFINITY : maxSeen,
         seen: new Map(),
         stack: [{ state: startState, depth: 0 }],
     };
@@ -485,6 +486,11 @@ export function stepSolve(solver, cards, engine, options) {
             continue;
         }
         solver.seen.set(key, node.depth);
+        if (Number.isFinite(solver.maxSeen) &&
+            solver.maxSeen !== Number.POSITIVE_INFINITY &&
+            solver.seen.size >= solver.maxSeen) {
+            return { status: "budget" };
+        }
         const actions = engine.getLegalActions(node.state, cards);
         for (let i = actions.length - 1; i >= 0; i -= 1) {
             const action = actions[i];

@@ -626,6 +626,7 @@ export interface GeneratorSolveState {
   wins: number;
   visited: number;
   maxNodes: number;
+  maxSeen: number;
   seen: Map<string, number>;
   stack: { state: GameState; depth: number }[];
 }
@@ -638,7 +639,8 @@ export interface SolveStepResult {
 export function createSolveState(
   puzzle: Puzzle,
   engine: GeneratorEngine,
-  maxNodes: number
+  maxNodes: number,
+  maxSeen = 200000
 ): GeneratorSolveState {
   const startState = engine.normalizeState({
     player: puzzle.player,
@@ -652,6 +654,7 @@ export function createSolveState(
     wins: 0,
     visited: 0,
     maxNodes,
+    maxSeen: maxSeen === 0 ? Number.POSITIVE_INFINITY : maxSeen,
     seen: new Map(),
     stack: [{ state: startState, depth: 0 }],
   };
@@ -713,6 +716,13 @@ export function stepSolve(
       continue;
     }
     solver.seen.set(key, node.depth);
+    if (
+      Number.isFinite(solver.maxSeen) &&
+      solver.maxSeen !== Number.POSITIVE_INFINITY &&
+      solver.seen.size >= solver.maxSeen
+    ) {
+      return { status: "budget" };
+    }
 
     const actions = engine.getLegalActions(node.state, cards);
     for (let i = actions.length - 1; i >= 0; i -= 1) {
