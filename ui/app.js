@@ -16,6 +16,7 @@ import {
 } from "./gen/generator/core.js";
 import { initTooltips } from "./tooltip.js";
 import { KEYWORD_TOOLTIPS, formatKeyword } from "./keywords.js";
+import { createSfxManager } from "./sfx.js";
 
 const fallbackCards = {
   cards: [
@@ -412,6 +413,7 @@ const elements = {
   puzzleSelect: document.getElementById("puzzle-select"),
   puzzleDifficulty: document.getElementById("puzzle-difficulty"),
   puzzleTags: document.getElementById("puzzle-tags"),
+  sfxToggle: document.getElementById("sfx-toggle"),
   playboard: document.getElementById("playboard"),
   opponentHealth: document.getElementById("opponent-health"),
   opponentPoison: document.getElementById("opponent-poison"),
@@ -566,6 +568,37 @@ function resolveCardArt(def, cardId) {
 const GENERATOR_PREFS_KEY = "lockpick.generatorPrefs";
 const GENERATOR_MAX_GHOST_ACTIONS = 200;
 const GENERATOR_MAX_SOLVER_NODES = 75000;
+const SFX_PREFS_KEY = "lockpick.sfxEnabled";
+
+function loadSfxPreference() {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return true;
+  }
+  try {
+    const stored = window.localStorage.getItem(SFX_PREFS_KEY);
+    if (stored === null) {
+      return true;
+    }
+    return stored === "1";
+  } catch {
+    return true;
+  }
+}
+
+function saveSfxPreference(enabled) {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(SFX_PREFS_KEY, enabled ? "1" : "0");
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
+const sfx = createSfxManager({
+  enabled: loadSfxPreference(),
+});
 
 let cardLibrary = buildCardLibrary(fallbackCards);
 const generatorEngine = {
@@ -597,6 +630,16 @@ let lastSolverResults = { wins: [], startState: null };
 let generatorState = null;
 let generatorCancel = false;
 let generatorRunId = 0;
+
+function updateSfxToggle() {
+  const button = elements.sfxToggle;
+  if (!button) {
+    return;
+  }
+  const enabled = sfx.isEnabled();
+  button.textContent = enabled ? "SFX On" : "SFX Off";
+  button.setAttribute("aria-pressed", enabled ? "true" : "false");
+}
 
 async function loadCardLibrary() {
   try {
@@ -709,6 +752,14 @@ elements.panelToggle.addEventListener("click", () => {
   panel.classList.toggle("collapsed");
   const expanded = !panel.classList.contains("collapsed");
   elements.panelToggle.setAttribute("aria-expanded", String(expanded));
+});
+
+elements.sfxToggle?.addEventListener("click", () => {
+  const enabled = !sfx.isEnabled();
+  sfx.setEnabled(enabled, { preview: enabled });
+  saveSfxPreference(enabled);
+  updateSfxToggle();
+  setStatus(enabled ? "Sound effects enabled." : "Sound effects muted.");
 });
 
 elements.genRun.addEventListener("click", () => {
@@ -1588,8 +1639,17 @@ function applyAndRender(action, isSolutionStep = false) {
   try {
     const prev = currentState;
     const wasFinalRound = isFinalRound(prev);
+    const wasWin = isWin(prev);
     const next = applyAction(currentState, action, cardLibrary);
     damageFlash = computeDamageFlash(prev, next);
+    const isNowWin = isWin(next);
+    const dealtDamage = damageFlash.boss || damageFlash.creatures.size > 0;
+    if (action.type === "play") {
+      sfx.playCard();
+    }
+    if (dealtDamage) {
+      sfx.playDamage();
+    }
     currentState = next;
     snapshots.push(next);
     actions.push(action);
@@ -1597,13 +1657,20 @@ function applyAndRender(action, isSolutionStep = false) {
     if (isSolutionStep) {
       solutionIndex += 1;
     }
-    if (action.type === "end" && wasFinalRound && !isWin(next)) {
+    if (action.type === "end" && wasFinalRound && !isNowWin) {
+      const firstFailure = !failureState;
       failureState = true;
       setStatus("Final round ended. Puzzle failed.", "warn");
       stopAutoplay();
+      if (firstFailure) {
+        sfx.playLose();
+      }
     }
     render();
-    if (isWin(currentState)) {
+    if (!wasWin && isNowWin) {
+      sfx.playWin();
+    }
+    if (isNowWin) {
       setStatus("Boss defeated.");
       stopAutoplay();
     }
@@ -3022,6 +3089,7 @@ loadCardLibrary().then(() => {
   populatePuzzleSelect();
   elements.genSeedRandom.checked = true;
   elements.genSeed.disabled = true;
+  updateSfxToggle();
   renderEditCardList();
   render();
 });
