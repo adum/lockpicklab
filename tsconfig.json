@@ -16,6 +16,7 @@
     "generator/**/*.ts",
     "ui/**/*.ts",
     "scripts/**/*.ts",
+    "tests/**/*.ts",
     "types/**/*.d.ts"
   ]
 }

@@ -3,7 +3,9 @@
   "private": true,
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "build:ui-gen": "tsc -p tsconfig.generator-ui.json"
+    "build:ui-gen": "tsc -p tsconfig.generator-ui.json",
+    "test": "npm run build && node --test dist/tests/engine/*.test.js",
+    "test:watch": "npm run build && node --test --watch dist/tests/engine/*.test.js"
   },
   "devDependencies": {
     "typescript": "^5.4.0"
