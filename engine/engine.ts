@@ -9,8 +9,8 @@ import {
   ActivateAction,
   EffectDefinition,
   Keyword,
-} from "./types";
-import { cloneState } from "./state";
+} from "./types.js";
+import { cloneState } from "./state.js";
 
 const GUARD: Keyword = "guard";
 const PIERCE: Keyword = "pierce";

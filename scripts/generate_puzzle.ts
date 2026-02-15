@@ -13,6 +13,7 @@ import {
 } from "../generator/generator";
 import { applyAction, getLegalActions, isWin } from "../engine/engine";
 import type { CardInstance, Puzzle } from "../engine/types";
+import { parseArgs } from "./cli";
 
 const DEFAULTS = {
   seed: Date.now(),
@@ -51,34 +52,6 @@ Options:
   --verbose                 Print attempt/rejection reasons
 `.trim();
 
-function parseArgs(argv: string[]) {
-  const flags: Record<string, string | boolean> = {};
-  const positional: string[] = [];
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i];
-    if (arg.startsWith("--")) {
-      const eqIndex = arg.indexOf("=");
-      if (eqIndex !== -1) {
-        const key = arg.slice(2, eqIndex);
-        const value = arg.slice(eqIndex + 1);
-        flags[key] = value;
-        continue;
-      }
-      const key = arg.slice(2);
-      const next = argv[i + 1];
-      if (next && !next.startsWith("--")) {
-        flags[key] = next;
-        i += 1;
-      } else {
-        flags[key] = true;
-      }
-      continue;
-    }
-    positional.push(arg);
-  }
-  return { flags, positional };
-}
-
 function pickFlag(flags: Record<string, string | boolean>, keys: string[]) {
   for (const key of keys) {
     if (key in flags) {
@@ -108,6 +81,26 @@ function parseNumberValue(
     return Math.max(min, parsed);
   }
   return parsed;
+}
+
+function loadBossNames(): string[] {
+  const fallback = ["Toad Bureaucrat"];
+  const bossesPath = path.resolve("data/bosses.json");
+  if (!fs.existsSync(bossesPath)) {
+    return fallback;
+  }
+  try {
+    const raw = fs.readFileSync(bossesPath, "utf8");
+    const parsed = JSON.parse(raw) as {
+      bosses?: Array<{ name?: string }>;
+    };
+    const names = (parsed.bosses ?? [])
+      .map((entry) => entry?.name?.trim() ?? "")
+      .filter((name) => name.length > 0);
+    return names.length > 0 ? names : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function stripBossDefaults(puzzle: Puzzle): Puzzle {
@@ -175,7 +168,9 @@ function stripBossDefaults(puzzle: Puzzle): Puzzle {
 }
 
 function main() {
-  const { flags, positional } = parseArgs(process.argv.slice(2));
+  const { flags, positional } = parseArgs(process.argv.slice(2), {
+    shortBooleanFlags: ["h", "v"],
+  });
   if (flags.help || flags.h) {
     console.log(USAGE);
     return;
@@ -306,19 +301,7 @@ function main() {
   const cardsPath = path.resolve("cards/cards.json");
   const cards = loadCardLibrary(cardsPath);
   const rng = new Rng(seed);
-  const bossPool = [
-    "Toad Bureaucrat",
-    "Clockwork King",
-    "Ember Colossus",
-    "Frost Warden",
-    "Ironbound Seraph",
-    "Gravelord Mycel",
-    "Stormglass Oracle",
-    "Sunken Matron",
-    "Ashen Pilgrim",
-    "Brass Leviathan",
-    "Hollow Regent",
-  ];
+  const bossPool = loadBossNames();
   const bossRng = new Rng(seed ^ 0x9e3779b9);
   const bossName =
     bossNameOverride ||

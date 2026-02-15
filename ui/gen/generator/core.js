@@ -1,3 +1,4 @@
+import { createDfsState, isEarlyWin as sharedIsEarlyWin, isFinalRoundForSolver as sharedIsFinalRoundForSolver, isPastRoundLimit as sharedIsPastRoundLimit, stepDfsSearch, } from "../solver/core.js";
 export class Rng {
     constructor(seed) {
         this.state = seed >>> 0;
@@ -438,80 +439,42 @@ export function createSolveState(puzzle, engine, maxNodes, maxSeen = 200000) {
         manaPerRound: puzzle.manaPerRound ?? 0,
         targetRounds: puzzle.targetRounds,
     });
+    const search = createDfsState(startState, {
+        maxNodes,
+        maxSeen,
+    });
     return {
         puzzle,
         startState,
-        wins: 0,
-        visited: 0,
-        maxNodes,
-        maxSeen: maxSeen === 0 ? Number.POSITIVE_INFINITY : maxSeen,
-        seen: new Map(),
-        stack: [{ state: startState, depth: 0 }],
+        ...search,
     };
 }
 export function stepSolve(solver, cards, engine, options) {
-    const iterationsLimit = options?.iterationLimit ?? 250;
-    let iterations = 0;
-    while (solver.stack.length > 0 && iterations < iterationsLimit) {
-        const node = solver.stack.pop();
-        if (!node) {
-            break;
-        }
-        solver.visited += 1;
-        if (Number.isFinite(solver.maxNodes) &&
-            solver.maxNodes !== Number.POSITIVE_INFINITY &&
-            solver.visited >= solver.maxNodes) {
-            return { status: "budget" };
-        }
-        if (engine.isWin(node.state)) {
-            if (options?.enforceEarlyWin && isEarlyWin(node.state, options?.targetRounds)) {
-                return { status: "reject", reason: "early_win" };
-            }
-            solver.wins += 1;
-            if (options?.enforceSolutionCap &&
-                solver.wins > (options?.maxSolutions ?? 0)) {
-                return { status: "reject", reason: "solution_cap" };
-            }
-            iterations += 1;
-            continue;
-        }
-        if (isPastRoundLimit(node.state)) {
-            iterations += 1;
-            continue;
-        }
-        const key = JSON.stringify(node.state);
-        const prevDepth = solver.seen.get(key);
-        if (prevDepth !== undefined && prevDepth <= node.depth) {
-            iterations += 1;
-            continue;
-        }
-        solver.seen.set(key, node.depth);
-        if (Number.isFinite(solver.maxSeen) &&
-            solver.maxSeen !== Number.POSITIVE_INFINITY &&
-            solver.seen.size >= solver.maxSeen) {
-            return { status: "budget" };
-        }
-        const actions = engine.getLegalActions(node.state, cards);
-        for (let i = actions.length - 1; i >= 0; i -= 1) {
-            const action = actions[i];
-            if (action.type === "end" && isFinalRoundForSolver(node.state)) {
-                continue;
-            }
-            try {
-                const next = engine.applyAction(node.state, action, cards);
-                solver.stack.push({
-                    state: next,
-                    depth: node.depth + 1,
-                });
-            }
-            catch {
-                continue;
-            }
-        }
-        iterations += 1;
+    const enforceSolutionCap = Boolean(options?.enforceSolutionCap);
+    const maxSolutions = Number(options?.maxSolutions ?? 0);
+    solver.maxDepth = Number.POSITIVE_INFINITY;
+    solver.recordPaths = false;
+    solver.maxWins = enforceSolutionCap
+        ? Math.max(0, maxSolutions) + 1
+        : Number.POSITIVE_INFINITY;
+    const result = stepDfsSearch(solver, cards, engine, {
+        iterationLimit: options?.iterationLimit ?? 250,
+        rejectWin: options?.enforceEarlyWin
+            ? (state) => sharedIsEarlyWin(state, options?.targetRounds) ? "early_win" : undefined
+            : undefined,
+    });
+    if (result.status === "budget") {
+        return { status: "budget" };
     }
-    if (solver.stack.length === 0) {
-        if (solver.wins > 0 && (!options?.enforceSolutionCap || solver.wins <= (options?.maxSolutions ?? 0))) {
+    if (result.status === "reject") {
+        return { status: "reject", reason: "early_win" };
+    }
+    if (result.status === "max_wins" && enforceSolutionCap) {
+        return { status: "reject", reason: "solution_cap" };
+    }
+    if (result.status === "done") {
+        if (solver.wins > 0 &&
+            (!enforceSolutionCap || solver.wins <= Math.max(0, maxSolutions))) {
             return { status: "success" };
         }
         return { status: "exhausted" };
@@ -519,29 +482,13 @@ export function stepSolve(solver, cards, engine, options) {
     return { status: "continue" };
 }
 export function isEarlyWin(state, targetRounds) {
-    const rounds = typeof targetRounds === "number" ? targetRounds : Number(targetRounds ?? 0);
-    if (!Number.isFinite(rounds) || rounds <= 1) {
-        return false;
-    }
-    return state.turn < rounds;
+    return sharedIsEarlyWin(state, targetRounds);
 }
 export function isFinalRoundForSolver(state) {
-    const totalRounds = typeof state.targetRounds === "number"
-        ? state.targetRounds
-        : Number(state.targetRounds);
-    if (!Number.isFinite(totalRounds)) {
-        return false;
-    }
-    return totalRounds - (state.turn - 1) === 1;
+    return sharedIsFinalRoundForSolver(state);
 }
 export function isPastRoundLimit(state) {
-    const totalRounds = typeof state.targetRounds === "number"
-        ? state.targetRounds
-        : Number(state.targetRounds);
-    if (!Number.isFinite(totalRounds)) {
-        return false;
-    }
-    return state.turn > totalRounds;
+    return sharedIsPastRoundLimit(state);
 }
 function pickHand(rng, pool, count) {
     const hand = [];

@@ -4,9 +4,9 @@
     "module": "ES2020",
     "rootDir": ".",
     "outDir": "ui/gen",
-    "strict": false,
+    "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["generator/core.ts", "solver/core.ts"]
+  "include": ["engine/browser.ts"]
 }

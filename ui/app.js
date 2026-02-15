@@ -12,11 +12,19 @@ import {
   buildPuzzleAttempt,
   createSolveState,
   stepSolve,
-  isBossModAllowed,
 } from "./gen/generator/core.js";
+import {
+  createDfsState,
+  stepDfsSearch,
+} from "./gen/solver/core.js";
 import { initTooltips } from "./tooltip.js";
-import { KEYWORD_TOOLTIPS, formatKeyword } from "./keywords.js";
+import { KEYWORD_TOOLTIPS } from "./keywords.js";
 import { createSfxManager } from "./sfx.js";
+import {
+  formatEffects,
+  isBossModAllowed,
+  resolveCardArt,
+} from "./shared/card-presentation.js";
 
 const fallbackCards = {
   cards: [
@@ -350,7 +358,7 @@ const fallbackCards = {
   ],
 };
 
-const defaultPuzzle = {
+const fallbackPuzzle = {
   id: "puzzle_0001",
   difficulty: "hard",
   seed: 8842,
@@ -358,15 +366,8 @@ const defaultPuzzle = {
   targetRounds: 2,
   manaPerRound: 2,
   player: {
-    mana: 15,
-    hand: [
-      "brood_herald",
-      "devourer",
-      "brittle_blessing",
-      "echo_step",
-      "doomclock",
-      "colossus_bane",
-    ],
+    mana: 5,
+    hand: ["cultist", "war_banner", "lancer", "fireball", "spark"],
     board: [],
   },
   opponent: {
@@ -394,20 +395,40 @@ const defaultPuzzle = {
   },
 };
 
-const clockworkPuzzle = {
-  ...structuredClone(defaultPuzzle),
-  id: "puzzle_0002",
-  seed: 9124,
-  opponent: {
-    ...defaultPuzzle.opponent,
-    name: "Clockwork King",
-  },
-  metadata: {
-    version: 1,
-    description:
-      "Clockwork King oversees the same opening, but brings a new machine aesthetic.",
-  },
-};
+let defaultPuzzle = structuredClone(fallbackPuzzle);
+
+function buildClockworkPuzzle(basePuzzle) {
+  return {
+    ...structuredClone(basePuzzle),
+    id: "puzzle_0002",
+    seed: 9124,
+    opponent: {
+      ...basePuzzle.opponent,
+      name: "Clockwork King",
+    },
+    metadata: {
+      version: 1,
+      description:
+        "Clockwork King oversees the same opening, but brings a new machine aesthetic.",
+    },
+  };
+}
+
+function buildPuzzleLibrary(basePuzzle) {
+  const clockworkPuzzle = buildClockworkPuzzle(basePuzzle);
+  return [
+    {
+      id: "puzzle_0001",
+      label: "Puzzle 1 — Lancer Strike",
+      data: basePuzzle,
+    },
+    {
+      id: "puzzle_0002",
+      label: "Puzzle 2 — Clockwork King",
+      data: clockworkPuzzle,
+    },
+  ];
+}
 
 const elements = {
   puzzleSelect: document.getElementById("puzzle-select"),
@@ -475,95 +496,12 @@ const elements = {
   genReject: document.getElementById("gen-reject"),
 };
 
-const PUZZLE_LIBRARY = [
-  {
-    id: "puzzle_0001",
-    label: "Puzzle 1 — Lancer Strike",
-    data: defaultPuzzle,
-  },
-  {
-    id: "puzzle_0002",
-    label: "Puzzle 2 — Clockwork King",
-    data: clockworkPuzzle,
-  },
-];
+let puzzleLibrary = buildPuzzleLibrary(defaultPuzzle);
 
-const BOSS_ART = {
+const DEFAULT_BOSS_ART = {
   "Toad Bureaucrat": "./assets/boss/toad_dark.jpg",
-  "Clockwork King": "./assets/boss/clockwork.jpg",
-  "Ember Colossus": "./assets/boss/ember_colossus.jpg",
-  "Frost Warden": "./assets/boss/frost_warden.jpg",
-  "Ironbound Seraph": "./assets/boss/ironbound_seraph.jpg",
-  "Gravelord Mycel": "./assets/boss/gravelord_mycel.jpg",
-  "Stormglass Oracle": "./assets/boss/stormglass_oracle.jpg",
-  "Sunken Matron": "./assets/boss/sunken_matron.jpg",
-  "Ashen Pilgrim": "./assets/boss/ashen_pilgrim.jpg",
-  "Brass Leviathan": "./assets/boss/brass_leviathan.jpg",
-  "Hollow Regent": "./assets/boss/hollow_regent.jpg",
 };
-
-const CREATURE_ART = {
-  cultist: "./assets/creatures/cultist.jpg",
-  lancer: "./assets/creatures/lancer.jpg",
-  iron_golem: "./assets/creatures/iron_golem.jpg",
-};
-
-const CREATURE_PLACEHOLDER = "./assets/creatures/placeholder.jpg";
-
-const EFFECT_ART = {
-  war_banner: "./assets/effects/placeholder.jpg",
-  vigil_banner: "./assets/effects/placeholder.jpg",
-};
-
-const EFFECT_PLACEHOLDER = "./assets/effects/placeholder.jpg";
-
-const MOD_ART = {
-  piercing_rune: "./assets/mods/placeholder.jpg",
-  testudo_rune: "./assets/mods/placeholder.jpg",
-  wooden_shield: "./assets/mods/placeholder.jpg",
-  requiem_rune: "./assets/mods/placeholder.jpg",
-  flank_rune: "./assets/mods/placeholder.jpg",
-};
-
-const MOD_PLACEHOLDER = "./assets/mods/placeholder.jpg";
-
-const SPELL_ART = {
-  fireball: "./assets/spells/fireball.jpg",
-  spark: "./assets/spells/spark.jpg",
-  blightwave: "./assets/spells/placeholder.jpg",
-  toxic_mist: "./assets/spells/placeholder.jpg",
-};
-
-const SPELL_PLACEHOLDER = "./assets/spells/placeholder.jpg";
-
-function resolveCardArt(def, cardId) {
-  const type = def?.type;
-  let artMap = null;
-  let fallback = null;
-  let folder = null;
-  if (type === "spell") {
-    artMap = SPELL_ART;
-    fallback = SPELL_PLACEHOLDER;
-    folder = "spells";
-  } else if (type === "effect") {
-    artMap = EFFECT_ART;
-    fallback = EFFECT_PLACEHOLDER;
-    folder = "effects";
-  } else if (type === "mod") {
-    artMap = MOD_ART;
-    fallback = MOD_PLACEHOLDER;
-    folder = "mods";
-  } else {
-    artMap = CREATURE_ART;
-    fallback = CREATURE_PLACEHOLDER;
-    folder = "creatures";
-  }
-  const id = def?.id ?? cardId;
-  const mapped = id ? artMap[id] : null;
-  const auto = id ? `./assets/${folder}/${id}.jpg` : null;
-  const useMapped = mapped && mapped !== fallback;
-  return { src: useMapped ? mapped : auto ?? fallback, fallback };
-}
+let bossArtMap = { ...DEFAULT_BOSS_ART };
 
 const GENERATOR_PREFS_KEY = "lockpick.generatorPrefs";
 const GENERATOR_MAX_GHOST_ACTIONS = 200;
@@ -607,6 +545,11 @@ const generatorEngine = {
   isWin,
   normalizeState,
   cloneState,
+};
+const solverEngine = {
+  applyAction,
+  getLegalActions,
+  isWin,
 };
 let currentPuzzle = structuredClone(defaultPuzzle);
 let initialState = normalizeState({
@@ -652,6 +595,46 @@ async function loadCardLibrary() {
     setStatus("Loaded card library.");
   } catch {
     setStatus("Using fallback card library.", "warn");
+  }
+}
+
+async function loadBossCatalog() {
+  try {
+    const response = await fetch("../data/bosses.json");
+    if (!response.ok) {
+      throw new Error("Boss catalog not found");
+    }
+    const data = await response.json();
+    const entries = Array.isArray(data?.bosses) ? data.bosses : [];
+    const nextMap = {};
+    entries.forEach((entry) => {
+      const name = typeof entry?.name === "string" ? entry.name.trim() : "";
+      const art = typeof entry?.art === "string" ? entry.art.trim() : "";
+      if (!name || !art) {
+        return;
+      }
+      nextMap[name] = `./assets/boss/${art}`;
+    });
+    if (Object.keys(nextMap).length > 0) {
+      bossArtMap = nextMap;
+    }
+  } catch {
+    // Keep fallback map.
+  }
+}
+
+async function loadDefaultPuzzle() {
+  try {
+    const response = await fetch("../puzzles/example.json");
+    if (!response.ok) {
+      throw new Error("Default puzzle not found");
+    }
+    const loaded = await response.json();
+    defaultPuzzle = loaded;
+    puzzleLibrary = buildPuzzleLibrary(defaultPuzzle);
+  } catch {
+    defaultPuzzle = structuredClone(fallbackPuzzle);
+    puzzleLibrary = buildPuzzleLibrary(defaultPuzzle);
   }
 }
 
@@ -942,7 +925,7 @@ elements.puzzleSelect.addEventListener("change", () => {
   if (!value || value === "custom") {
     return;
   }
-  const entry = PUZZLE_LIBRARY.find((item) => item.id === value);
+  const entry = puzzleLibrary.find((item) => item.id === value);
   if (!entry) {
     return;
   }
@@ -974,7 +957,7 @@ function syncPuzzleSelect() {
       select.appendChild(option);
     }
   }
-  const hasEntry = PUZZLE_LIBRARY.some((item) => item.id === currentId);
+  const hasEntry = puzzleLibrary.some((item) => item.id === currentId);
   select.value = hasEntry ? currentId : "custom";
 }
 
@@ -984,7 +967,7 @@ function populatePuzzleSelect() {
     return;
   }
   select.innerHTML = "";
-  PUZZLE_LIBRARY.forEach((entry) => {
+  puzzleLibrary.forEach((entry) => {
     const option = document.createElement("option");
     option.value = entry.id;
     option.textContent = entry.label;
@@ -1053,7 +1036,7 @@ function startGenerator() {
     solverBudget === Number.POSITIVE_INFINITY ? "∞" : String(solverBudget);
 
   const rng = new Rng(seed);
-  const bossNames = Object.keys(BOSS_ART);
+  const bossNames = Object.keys(bossArtMap);
   const bossRng = new Rng(seed ^ 0x9e3779b9);
   const bossName =
     bossNames.length > 0
@@ -1718,7 +1701,7 @@ function render() {
     elements.bossName.textContent = bossName;
   }
   if (elements.bossArt) {
-    elements.bossArt.src = BOSS_ART[bossName] ?? "./assets/boss/toad.png";
+    elements.bossArt.src = bossArtMap[bossName] ?? "./assets/boss/toad.png";
     elements.bossArt.alt = bossName;
   }
 
@@ -1833,28 +1816,6 @@ function isFinalRound(state) {
   return totalRounds - (state.turn - 1) === 1;
 }
 
-function isFinalRoundForSolver(state) {
-  const totalRounds =
-    typeof state.targetRounds === "number"
-      ? state.targetRounds
-      : Number(state.targetRounds);
-  if (!Number.isFinite(totalRounds)) {
-    return false;
-  }
-  return totalRounds - (state.turn - 1) === 1;
-}
-
-function isPastRoundLimit(state) {
-  const totalRounds =
-    typeof state.targetRounds === "number"
-      ? state.targetRounds
-      : Number(state.targetRounds);
-  if (!Number.isFinite(totalRounds)) {
-    return false;
-  }
-  return state.turn > totalRounds;
-}
-
 function startSolver() {
   if (solverState) {
     stopSolver();
@@ -1869,16 +1830,14 @@ function startSolver() {
 
   const startState = structuredClone(currentState);
   solverState = {
-    maxDepth,
-    maxWins,
-    wins: [],
-    visited: 0,
-    expanded: 0,
-    seen: new Map(),
+    ...createDfsState(startState, {
+      maxDepth,
+      maxWins,
+      recordPaths: true,
+    }),
     startState,
-    stack: [{ state: startState, depth: 0, path: [] }],
   };
-  lastSolverResults = { wins: solverState.wins, startState };
+  lastSolverResults = { wins: solverState.winPaths, startState };
 
   updateSolverUI({ running: true });
   stepSolver();
@@ -1895,72 +1854,18 @@ function stepSolver() {
   if (!solverState) {
     return;
   }
-  const { maxDepth, maxWins, wins, seen, stack } = solverState;
-  let iterations = 0;
-
-  while (stack.length > 0 && iterations < 250) {
-    if (solverCancel) {
-      finalizeSolver(true);
-      return;
-    }
-
-    const node = stack.pop();
-    solverState.visited += 1;
-
-    if (isWin(node.state)) {
-      wins.push(node.path);
-      if (wins.length >= maxWins) {
-        finalizeSolver(false);
-        return;
-      }
-      iterations += 1;
-      continue;
-    }
-
-    if (isPastRoundLimit(node.state)) {
-      iterations += 1;
-      continue;
-    }
-
-    if (node.depth >= maxDepth) {
-      iterations += 1;
-      continue;
-    }
-
-    const key = JSON.stringify(node.state);
-    const prevDepth = seen.get(key);
-    if (prevDepth !== undefined && prevDepth <= node.depth) {
-      iterations += 1;
-      continue;
-    }
-    seen.set(key, node.depth);
-
-    const actions = getLegalActions(node.state, cardLibrary);
-    solverState.expanded += 1;
-
-    for (let i = actions.length - 1; i >= 0; i -= 1) {
-      const action = actions[i];
-      if (action.type === "end" && isFinalRoundForSolver(node.state)) {
-        continue;
-      }
-      try {
-        const next = applyAction(node.state, action, cardLibrary);
-        stack.push({
-          state: next,
-          depth: node.depth + 1,
-          path: [...node.path, action],
-        });
-      } catch {
-        continue;
-      }
-    }
-
-    iterations += 1;
+  if (solverCancel) {
+    finalizeSolver(true);
+    return;
   }
+
+  const result = stepDfsSearch(solverState, cardLibrary, solverEngine, {
+    iterationLimit: 250,
+  });
 
   updateSolverUI({ running: true });
 
-  if (stack.length === 0 || wins.length >= maxWins) {
+  if (result.status !== "continue") {
     finalizeSolver(false);
     return;
   }
@@ -1973,7 +1878,7 @@ function finalizeSolver(cancelled) {
     return;
   }
   lastSolverResults = {
-    wins: solverState.wins,
+    wins: solverState.winPaths,
     startState: solverState.startState ?? lastSolverResults.startState,
   };
   updateSolverUI({
@@ -2007,11 +1912,11 @@ function updateSolverUI(state) {
   }
   if (solverState) {
     lastSolverResults = {
-      wins: solverState.wins,
+      wins: solverState.winPaths,
       startState: solverState.startState ?? lastSolverResults.startState,
     };
   }
-  const wins = solverState?.wins?.length ?? lastSolverResults.wins.length ?? 0;
+  const wins = solverState?.winPaths?.length ?? lastSolverResults.wins.length ?? 0;
   const visited = solverState?.visited ?? 0;
   const expanded = solverState?.expanded ?? 0;
 
@@ -2043,7 +1948,7 @@ function renderSolverResults() {
   if (!container) {
     return;
   }
-  const wins = solverState?.wins ?? lastSolverResults.wins;
+  const wins = solverState?.winPaths ?? lastSolverResults.wins;
   const startState = solverState?.startState ?? lastSolverResults.startState;
   const displayLimit = 10;
   const totalWins = wins?.length ?? 0;
@@ -2385,7 +2290,7 @@ function renderBoard(container, list, side, options = {}) {
             const modIcon = document.createElement("span");
             modIcon.className = "mod-icon";
             modIcon.textContent = modDef?.name?.[0]?.toUpperCase() ?? "M";
-            const desc = modDef ? formatCardDescription(modDef) : "";
+            const desc = modDef ? formatEffects(modDef.effects, { compact: true }) : "";
             if (modDef?.name || desc) {
               modIcon.dataset.tooltip = `${modDef?.name ?? "Mod"}${desc ? `: ${desc}` : ""}`;
             }
@@ -2403,7 +2308,7 @@ function renderBoard(container, list, side, options = {}) {
 
     let desc = null;
     if (def?.effects && def.effects.length > 0) {
-      const descText = formatCardDescription(def);
+      const descText = formatEffects(def.effects, { compact: true });
       if (descText) {
         desc = document.createElement("div");
         desc.className = "card-desc";
@@ -2740,7 +2645,7 @@ function renderHand(container, hand) {
     chip.appendChild(nameEl);
 
     if (def?.effects && def.effects.length > 0) {
-      const descText = formatCardDescription(def);
+      const descText = formatEffects(def.effects, { compact: true });
       if (descText) {
         const descEl = document.createElement("div");
         descEl.className = "hand-desc";
@@ -2901,191 +2806,11 @@ function triggerBossFlash() {
   }
 }
 
-function formatCardDescription(def) {
-  if (!def?.effects || def.effects.length === 0) {
-    return "";
-  }
-  const parts = [];
-  def.effects.forEach((effect) => {
-    if (effect.type === "damage") {
-      const chain = effect.chain_amount ? ` (Chain ${effect.chain_amount})` : "";
-      parts.push(`Deal ${effect.amount} dmg${chain}`);
-      return;
-    }
-    if (effect.type === "damage_all") {
-      parts.push(`Deal ${effect.amount} dmg to all creatures`);
-      return;
-    }
-    if (effect.type === "grant_keyword_allies") {
-      parts.push(`Give your creatures ${formatKeyword(effect.keyword)}`);
-      return;
-    }
-    if (effect.type === "poison_allies") {
-      parts.push(`Give your creatures ${effect.amount} poison`);
-      return;
-    }
-    if (effect.type === "borrow_enemy") {
-      parts.push(
-        "Borrow a boss creature this round; it returns to the boss at end with double power"
-      );
-      return;
-    }
-    if (effect.type === "swap_positions") {
-      parts.push("Swap two creatures on the same board. Both become tired");
-      return;
-    }
-    if (effect.type === "repeat_last_spell") {
-      const surcharge = effect.surcharge ?? 1;
-      parts.push(`Repeat your last spell (pay +${surcharge} mana)`);
-      return;
-    }
-    if (effect.type === "execute_threshold") {
-      const threshold = effect.threshold ?? 0;
-      const manaGain = effect.mana_gain ?? 0;
-      parts.push(
-        `Destroy all creatures with ${threshold}+ power and gain ${manaGain} mana each`
-      );
-      return;
-    }
-    if (effect.type === "devour_ally") {
-      parts.push("On play: devour a friendly creature and gain its power");
-      return;
-    }
-    if (effect.type === "enter_tired") {
-      parts.push("Enters tired");
-      return;
-    }
-    if (effect.type === "death_damage_boss") {
-      parts.push(`On death: deal ${effect.amount} dmg to boss`);
-      return;
-    }
-    if (effect.type === "death_heal_boss") {
-      parts.push(`On death: boss heals ${effect.amount}`);
-      return;
-    }
-    if (effect.type === "death_damage_all_enemies") {
-      parts.push(`On death: deal ${effect.amount} dmg to enemy creatures`);
-      return;
-    }
-    if (effect.type === "death_after_attack") {
-      parts.push("After this creature attacks, it dies");
-      return;
-    }
-    if (effect.type === "purge_mods") {
-      parts.push("Remove all mods from a creature");
-      return;
-    }
-    if (effect.type === "summon_enemy_broodling") {
-      parts.push("On play: summon a Broodling for the boss");
-      return;
-    }
-    if (effect.type === "end_clone_boss_on_mass_death") {
-      parts.push(
-        `End of round: if ${effect.amount}+ creatures died, copy the strongest boss creature`
-      );
-      return;
-    }
-    if (effect.type === "cast_counter") {
-      const amount = effect.amount ?? 1;
-      parts.push(
-        `Gain ${amount} counter${amount === 1 ? "" : "s"} whenever you cast a spell or mod`
-      );
-      return;
-    }
-    if (effect.type === "death_counter") {
-      const amount = effect.amount ?? 1;
-      parts.push(
-        `Gain ${amount} counter${amount === 1 ? "" : "s"} whenever a creature dies`
-      );
-      return;
-    }
-    if (effect.type === "activate_damage") {
-      const threshold = effect.threshold ?? 0;
-      parts.push(
-        `Activate at ${threshold} counters: deal ${effect.amount} dmg to any target`
-      );
-      return;
-    }
-    if (effect.type === "activate_mana") {
-      parts.push("Activate: gain mana equal to counters, then destroy this");
-      return;
-    }
-    if (effect.type === "mana_on_mod") {
-      parts.push(`Gain ${effect.amount} mana when you play a mod`);
-      return;
-    }
-    if (effect.type === "end_mana") {
-      if (effect.amount < 0) {
-        parts.push(`End of round: lose ${Math.abs(effect.amount)} mana`);
-      } else {
-        parts.push(`End of round: gain ${effect.amount} mana`);
-      }
-      return;
-    }
-    if (effect.type === "end_damage_boss") {
-      parts.push(`End of round: deal ${effect.amount} dmg to boss`);
-      return;
-    }
-    if (effect.type === "end_self_buff") {
-      if (effect.stat === "power") {
-        if (effect.amount < 0) {
-          parts.push(`End of round: this loses ${Math.abs(effect.amount)} power`);
-        } else {
-          parts.push(`End of round: this gains ${effect.amount} power`);
-        }
-      }
-      return;
-    }
-    if (effect.type === "buff") {
-      if (effect.amount < 0) {
-        parts.push(`Lose ${Math.abs(effect.amount)} power`);
-      } else {
-        parts.push(`Give +${effect.amount} power`);
-      }
-      return;
-    }
-    if (effect.type === "shield") {
-      parts.push(`Shield ${effect.amount} (blocks next damage)`);
-      return;
-    }
-    if (effect.type === "aura") {
-      if (effect.stat === "power" && effect.applies_to === "attack") {
-        parts.push(`Your creatures get +${effect.amount} power on attack`);
-      } else {
-        parts.push(`Aura: +${effect.amount} ${effect.stat}`);
-      }
-      return;
-    }
-    if (effect.type === "end_buff") {
-      if (effect.stat === "power" && effect.applies_to === "untired") {
-        parts.push(`End of round: untired creatures gain +${effect.amount} power`);
-      } else {
-        parts.push(`End of round: +${effect.amount} ${effect.stat}`);
-      }
-      return;
-    }
-    if (effect.type === "end_adjacent_buff") {
-      parts.push(`End of round: adjacent allies gain +${effect.amount} power`);
-      return;
-    }
-    if (effect.type === "no_attack") {
-      parts.push("Cannot attack");
-      return;
-    }
-    if (effect.type === "anchored_aura") {
-      const amount = effect.amount ?? 1;
-      parts.push(`Adjacent allies gain +${amount} power`);
-      return;
-    }
-    if (effect.type === "grant_keyword") {
-      parts.push(`Grant ${formatKeyword(effect.keyword)}`);
-    }
-  });
-  return parts.join("; ");
-}
-
 initTooltips();
-loadCardLibrary().then(() => {
+Promise.all([loadCardLibrary(), loadBossCatalog(), loadDefaultPuzzle()]).then(() => {
+  currentPuzzle = structuredClone(defaultPuzzle);
+  elements.puzzleJson.value = JSON.stringify(currentPuzzle, null, 2);
+  resetState();
   populatePuzzleSelect();
   elements.genSeedRandom.checked = true;
   elements.genSeed.disabled = true;

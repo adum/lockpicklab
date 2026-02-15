@@ -1,0 +1,48 @@
+{
+  "bosses": [
+    {
+      "name": "Toad Bureaucrat",
+      "art": "toad_dark.jpg"
+    },
+    {
+      "name": "Clockwork King",
+      "art": "clockwork.jpg"
+    },
+    {
+      "name": "Ember Colossus",
+      "art": "ember_colossus.jpg"
+    },
+    {
+      "name": "Frost Warden",
+      "art": "frost_warden.jpg"
+    },
+    {
+      "name": "Ironbound Seraph",
+      "art": "ironbound_seraph.jpg"
+    },
+    {
+      "name": "Gravelord Mycel",
+      "art": "gravelord_mycel.jpg"
+    },
+    {
+      "name": "Stormglass Oracle",
+      "art": "stormglass_oracle.jpg"
+    },
+    {
+      "name": "Sunken Matron",
+      "art": "sunken_matron.jpg"
+    },
+    {
+      "name": "Ashen Pilgrim",
+      "art": "ashen_pilgrim.jpg"
+    },
+    {
+      "name": "Brass Leviathan",
+      "art": "brass_leviathan.jpg"
+    },
+    {
+      "name": "Hollow Regent",
+      "art": "hollow_regent.jpg"
+    }
+  ]
+}

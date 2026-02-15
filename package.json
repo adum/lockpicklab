@@ -4,6 +4,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "build:ui-gen": "tsc -p tsconfig.generator-ui.json",
+    "build:ui-engine": "tsc -p tsconfig.ui-engine.json",
+    "build:ui": "npm run build:ui-engine && npm run build:ui-gen",
     "test": "npm run build && node --test dist/tests/engine/*.test.js",
     "test:watch": "npm run build && node --test --watch dist/tests/engine/*.test.js"
   },

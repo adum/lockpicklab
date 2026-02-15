@@ -4,6 +4,7 @@ import { loadCardLibrary } from "../engine/cards";
 import { normalizeState } from "../engine/state";
 import { Puzzle } from "../engine/types";
 import { solve } from "../solver/solver";
+import { parseArgs } from "./cli";
 
 const USAGE = `
 Usage:
@@ -14,45 +15,15 @@ Options:
   --help, -h            Show this help message
 `.trim();
 
-function parseArgs(argv: string[]) {
-  const flags: Record<string, string | boolean> = {};
-  const positional: string[] = [];
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i];
-    if (arg.startsWith("--")) {
-      const eqIndex = arg.indexOf("=");
-      if (eqIndex !== -1) {
-        const key = arg.slice(2, eqIndex);
-        const value = arg.slice(eqIndex + 1);
-        flags[key] = value;
-        continue;
-      }
-      const key = arg.slice(2);
-      const next = argv[i + 1];
-      if (next && !next.startsWith("--")) {
-        flags[key] = next;
-        i += 1;
-      } else {
-        flags[key] = true;
-      }
-      continue;
-    }
-    if (arg === "-h") {
-      flags.h = true;
-      continue;
-    }
-    positional.push(arg);
-  }
-  return { flags, positional };
-}
-
 const proc = (globalThis as {
   process?: { argv?: string[] };
 }).process;
 const argv = proc?.argv ?? [];
 
 function main() {
-  const { flags, positional } = parseArgs(argv.slice(2));
+  const { flags, positional } = parseArgs(argv.slice(2), {
+    shortBooleanFlags: ["h"],
+  });
   if (flags.help || flags.h) {
     console.log(USAGE);
     return;

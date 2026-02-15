@@ -1,5 +1,5 @@
 import fs from "fs";
-import { CardDefinition, CardLibrary } from "./types";
+import { CardDefinition, CardLibrary } from "./types.js";
 
 export function buildCardLibrary(cards: CardDefinition[]): CardLibrary {
   const byId: Record<string, CardDefinition> = {};

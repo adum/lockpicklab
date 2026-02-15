@@ -10,6 +10,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CARDS_PATH = PROJECT_ROOT / "cards" / "cards.json"
 GEN_SCRIPT = PROJECT_ROOT / "scripts" / "generate_card_art.py"
+BOSSES_PATH = PROJECT_ROOT / "data" / "bosses.json"
 
 TYPE_DIRS = {
     "creature": PROJECT_ROOT / "ui" / "assets" / "creatures",
@@ -19,19 +20,26 @@ TYPE_DIRS = {
 }
 
 BOSS_DIR = PROJECT_ROOT / "ui" / "assets" / "boss"
-BOSS_ART = {
-    "Toad Bureaucrat": "toad_dark.jpg",
-    "Clockwork King": "clockwork.jpg",
-    "Ember Colossus": "ember_colossus.jpg",
-    "Frost Warden": "frost_warden.jpg",
-    "Ironbound Seraph": "ironbound_seraph.jpg",
-    "Gravelord Mycel": "gravelord_mycel.jpg",
-    "Stormglass Oracle": "stormglass_oracle.jpg",
-    "Sunken Matron": "sunken_matron.jpg",
-    "Ashen Pilgrim": "ashen_pilgrim.jpg",
-    "Brass Leviathan": "brass_leviathan.jpg",
-    "Hollow Regent": "hollow_regent.jpg",
-}
+
+
+def load_boss_art_map() -> dict[str, str]:
+    fallback = {"Toad Bureaucrat": "toad_dark.jpg"}
+    if not BOSSES_PATH.exists():
+        return fallback
+    try:
+        with BOSSES_PATH.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        items = data.get("bosses", [])
+        result: dict[str, str] = {}
+        for item in items:
+            name = (item.get("name") or "").strip()
+            art = (item.get("art") or "").strip()
+            if not name or not art:
+                continue
+            result[name] = art
+        return result or fallback
+    except Exception:
+        return fallback
 
 
 def build_prompt(card: dict) -> str:
@@ -168,8 +176,9 @@ def main() -> int:
 
     if remaining is None or remaining > 0:
         if args.bosses or args.bosses_only:
+            boss_art = load_boss_art_map()
             BOSS_DIR.mkdir(parents=True, exist_ok=True)
-            for boss_name, filename in BOSS_ART.items():
+            for boss_name, filename in boss_art.items():
                 dest = BOSS_DIR / filename
                 if dest.exists() and not args.force:
                     skipped += 1

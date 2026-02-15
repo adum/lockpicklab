@@ -1,4 +1,4 @@
-import { CardInstance, GameState, OpponentState, SideState } from "./types";
+import { CardInstance, GameState, OpponentState, SideState } from "./types.js";
 
 function cloneInstance(instance: CardInstance): CardInstance {
   const keywords = Array.isArray(instance.keywords) ? instance.keywords : [];
