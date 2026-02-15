@@ -481,6 +481,7 @@ const elements = {
   genHand: document.getElementById("gen-hand"),
   genHandMin: document.getElementById("gen-hand-min"),
   genDecoys: document.getElementById("gen-decoys"),
+  genRequiredCards: document.getElementById("gen-required-cards"),
   genRounds: document.getElementById("gen-rounds"),
   genBossMin: document.getElementById("gen-boss-min"),
   genBossMax: document.getElementById("gen-boss-max"),
@@ -904,6 +905,7 @@ elements.genSeedRandom.addEventListener("change", () => {
   elements.genHand,
   elements.genHandMin,
   elements.genDecoys,
+  elements.genRequiredCards,
   elements.genRounds,
   elements.genBossMin,
   elements.genBossMax,
@@ -1008,6 +1010,19 @@ function startGenerator() {
     return;
   }
   const decoys = parseNumber(elements.genDecoys.value, 0, 0, 6);
+  const requiredCards = parseCardIdList(elements.genRequiredCards?.value ?? "");
+  const unknownRequiredCards = requiredCards.filter(
+    (cardId) => !cardLibrary.byId?.[cardId]
+  );
+  if (unknownRequiredCards.length > 0) {
+    const label =
+      unknownRequiredCards.length > 3
+        ? `${unknownRequiredCards.slice(0, 3).join(", ")}...`
+        : unknownRequiredCards.join(", ");
+    setGeneratorNote(`Unknown required card IDs: ${label}`);
+    setStatus(`Unknown required card IDs: ${label}`, "warn");
+    return;
+  }
   const targetRounds = parseNumber(elements.genRounds.value, 1, 1, 6);
   const bossMin = parseNumber(elements.genBossMin?.value ?? 0, 0, 0, 6);
   const bossMax = parseNumber(elements.genBossMax?.value ?? 0, 0, 0, 6);
@@ -1055,6 +1070,7 @@ function startGenerator() {
     rng,
     handSize,
     minHandSize,
+    requiredCards,
     decoys,
     targetRounds,
     bossMin: bossMinClamped,
@@ -1325,6 +1341,16 @@ function parseNumber(value, fallback, min, max) {
   return Math.min(max, Math.max(min, parsed));
 }
 
+function parseCardIdList(value) {
+  const unique = new Set();
+  String(value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .forEach((item) => unique.add(item));
+  return Array.from(unique);
+}
+
 function isEditMode() {
   return Boolean(elements.editMode?.checked);
 }
@@ -1510,6 +1536,7 @@ function saveGeneratorPrefs() {
     hand: elements.genHand?.value ?? "",
     minHand: elements.genHandMin?.value ?? "",
     decoys: elements.genDecoys?.value ?? "",
+    requiredCards: elements.genRequiredCards?.value ?? "",
     rounds: elements.genRounds?.value ?? "",
     bossMin: elements.genBossMin?.value ?? "",
     bossMax: elements.genBossMax?.value ?? "",
@@ -1556,6 +1583,9 @@ function loadGeneratorPrefs() {
   }
   if (elements.genDecoys && typeof prefs.decoys === "string") {
     elements.genDecoys.value = prefs.decoys;
+  }
+  if (elements.genRequiredCards && typeof prefs.requiredCards === "string") {
+    elements.genRequiredCards.value = prefs.requiredCards;
   }
   if (elements.genRounds && typeof prefs.rounds === "string") {
     elements.genRounds.value = prefs.rounds;

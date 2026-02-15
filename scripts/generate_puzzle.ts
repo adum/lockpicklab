@@ -44,6 +44,7 @@ Options:
   --boss-max <n>            Maximum boss creatures (default: ${DEFAULTS.bossMax})
   --boss-mods <n>           Max mods per boss creature (default: ${DEFAULTS.bossModsMax})
   --boss-name <name>        Force boss name (default: random)
+  --require-cards <ids>     Comma-separated card IDs required in final player hand
   --action-budget <n>       Max ghost actions per attempt (0 = infinite; default: ${DEFAULTS.actionBudget})
   --solver-budget <n>       Max solver nodes (0 = infinite; default: ${DEFAULTS.solverBudget})
   --max-solutions <n>       Reject if more than N solutions (0 = no cap; default: ${DEFAULTS.maxSolutions})
@@ -81,6 +82,25 @@ function parseNumberValue(
     return Math.max(min, parsed);
   }
   return parsed;
+}
+
+function parseCardListValue(
+  raw: string | boolean | undefined,
+  label: string
+): string[] {
+  if (raw === undefined) {
+    return [];
+  }
+  if (typeof raw === "boolean") {
+    throw new Error(`Missing value for --${label}`);
+  }
+  const unique = new Set<string>();
+  raw
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .forEach((item) => unique.add(item));
+  return Array.from(unique);
 }
 
 function loadBossNames(): string[] {
@@ -185,6 +205,7 @@ function main() {
     "boss-max",
     "boss-mods",
     "boss-name",
+    "require-cards",
     "action-budget",
     "solver-budget",
     "max-solutions",
@@ -297,9 +318,19 @@ function main() {
     typeof outputPathRaw === "string" && outputPathRaw.trim().length > 0
       ? outputPathRaw.trim()
       : "";
+  const requiredCards = parseCardListValue(
+    pickFlag(flags, ["require-cards"]),
+    "require-cards"
+  );
 
   const cardsPath = path.resolve("cards/cards.json");
   const cards = loadCardLibrary(cardsPath);
+  const unknownRequiredCards = requiredCards.filter((cardId) => !cards.byId[cardId]);
+  if (unknownRequiredCards.length > 0) {
+    throw new Error(
+      `Unknown card ID(s) in --require-cards: ${unknownRequiredCards.join(", ")}`
+    );
+  }
   const rng = new Rng(seed);
   const bossPool = loadBossNames();
   const bossRng = new Rng(seed ^ 0x9e3779b9);
@@ -320,6 +351,7 @@ function main() {
     rng,
     handSize,
     minHandSize,
+    requiredCards,
     decoys,
     targetRounds,
     bossMin,

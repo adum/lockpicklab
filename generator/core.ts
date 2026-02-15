@@ -344,6 +344,7 @@ export interface GeneratorState {
   rng: Rng;
   handSize: number;
   minHandSize: number;
+  requiredCards?: string[];
   decoys: number;
   targetRounds: number;
   bossMin: number;
@@ -363,6 +364,42 @@ export interface GeneratorAttemptResult {
   actionCount: number;
   aborted: boolean;
   rejection?: string;
+}
+
+function normalizeRequiredCards(requiredCards: string[] | undefined): string[] {
+  if (!Array.isArray(requiredCards) || requiredCards.length === 0) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const raw of requiredCards) {
+    if (typeof raw !== "string") {
+      continue;
+    }
+    const cardId = raw.trim();
+    if (!cardId || seen.has(cardId)) {
+      continue;
+    }
+    seen.add(cardId);
+    normalized.push(cardId);
+  }
+  return normalized;
+}
+
+function mergeRequiredCards(hand: string[], requiredCards: string[]): string[] {
+  if (requiredCards.length === 0) {
+    return hand;
+  }
+  const existing = new Set(hand);
+  const merged = [...hand];
+  for (const cardId of requiredCards) {
+    if (existing.has(cardId)) {
+      continue;
+    }
+    merged.push(cardId);
+    existing.add(cardId);
+  }
+  return merged;
 }
 
 function getRepeatSurcharge(def: CardDefinition | undefined): number {
@@ -467,6 +504,7 @@ export function buildPuzzleAttempt(
   cards: CardLibrary,
   engine: GeneratorEngine
 ): GeneratorAttemptResult {
+  const requiredCards = normalizeRequiredCards(state.requiredCards);
   const hand = pickHand(state.rng, state.playable, state.handSize);
   const handLabel = hand
     .map((cardId) => cards.byId[cardId]?.name ?? cardId)
@@ -592,8 +630,20 @@ export function buildPuzzleAttempt(
         };
       }
     }
+    const withRequired =
+      requiredCards.length > 0
+        ? {
+            ...base,
+            player: {
+              ...base.player,
+              hand: mergeRequiredCards(base.player.hand, requiredCards),
+            },
+          }
+        : base;
     const puzzle =
-      state.decoys > 0 ? addDecoys(base, state.rng, state.playable, state.decoys) : base;
+      state.decoys > 0
+        ? addDecoys(withRequired, state.rng, state.playable, state.decoys)
+        : withRequired;
     const puzzleTypes = new Set(
       puzzle.player.hand
         .map((cardId) => cards.byId[cardId]?.type)

@@ -219,6 +219,40 @@ export function buildGeneratorPools(cards, options) {
         .map((card) => card.id);
     return { playable, creaturePool, bossModPool };
 }
+function normalizeRequiredCards(requiredCards) {
+    if (!Array.isArray(requiredCards) || requiredCards.length === 0) {
+        return [];
+    }
+    const seen = new Set();
+    const normalized = [];
+    for (const raw of requiredCards) {
+        if (typeof raw !== "string") {
+            continue;
+        }
+        const cardId = raw.trim();
+        if (!cardId || seen.has(cardId)) {
+            continue;
+        }
+        seen.add(cardId);
+        normalized.push(cardId);
+    }
+    return normalized;
+}
+function mergeRequiredCards(hand, requiredCards) {
+    if (requiredCards.length === 0) {
+        return hand;
+    }
+    const existing = new Set(hand);
+    const merged = [...hand];
+    for (const cardId of requiredCards) {
+        if (existing.has(cardId)) {
+            continue;
+        }
+        merged.push(cardId);
+        existing.add(cardId);
+    }
+    return merged;
+}
 function getRepeatSurcharge(def) {
     if (!def?.effects) {
         return 0;
@@ -295,6 +329,7 @@ function deriveManaPlan(ghost, cards, engine, rng) {
     return { startMana, manaPerRound };
 }
 export function buildPuzzleAttempt(state, cards, engine) {
+    const requiredCards = normalizeRequiredCards(state.requiredCards);
     const hand = pickHand(state.rng, state.playable, state.handSize);
     const handLabel = hand
         .map((cardId) => cards.byId[cardId]?.name ?? cardId)
@@ -401,7 +436,18 @@ export function buildPuzzleAttempt(state, cards, engine) {
                 };
             }
         }
-        const puzzle = state.decoys > 0 ? addDecoys(base, state.rng, state.playable, state.decoys) : base;
+        const withRequired = requiredCards.length > 0
+            ? {
+                ...base,
+                player: {
+                    ...base.player,
+                    hand: mergeRequiredCards(base.player.hand, requiredCards),
+                },
+            }
+            : base;
+        const puzzle = state.decoys > 0
+            ? addDecoys(withRequired, state.rng, state.playable, state.decoys)
+            : withRequired;
         const puzzleTypes = new Set(puzzle.player.hand
             .map((cardId) => cards.byId[cardId]?.type)
             .filter((type) => Boolean(type)));
