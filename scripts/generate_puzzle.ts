@@ -44,7 +44,7 @@ Options:
   --boss-max <n>            Maximum boss creatures (default: ${DEFAULTS.bossMax})
   --boss-mods <n>           Max mods per boss creature (default: ${DEFAULTS.bossModsMax})
   --boss-name <name>        Force boss name (default: random)
-  --require-cards <ids>     Comma-separated card IDs required in final player hand
+  --require-cards <ids>     Comma-separated card IDs required in the solved line
   --action-budget <n>       Max ghost actions per attempt (0 = infinite; default: ${DEFAULTS.actionBudget})
   --solver-budget <n>       Max solver nodes (0 = infinite; default: ${DEFAULTS.solverBudget})
   --max-solutions <n>       Reject if more than N solutions (0 = no cap; default: ${DEFAULTS.maxSolutions})
@@ -393,6 +393,7 @@ function main() {
           materialize: "materialize failed",
           early_mana: "hand is affordable too early",
           min_hand: "used hand smaller than minimum",
+          required_cards: "required cards were not all used",
         };
         const label = rejectionLabels[attempt.rejection] ?? attempt.rejection;
         console.log(`Rejected attempt #${attempts} (${label}).`);
@@ -478,6 +479,7 @@ function main() {
       materialize: "Materialize failed",
       early_mana: "Hand is affordable too early",
       min_hand: "Used hand smaller than minimum",
+      required_cards: "Required cards not used",
       early_win: "Early win",
       solution_cap: "Too many solutions",
       no_solutions: "No solutions",

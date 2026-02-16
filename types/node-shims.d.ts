@@ -1,5 +1,6 @@
 declare module "fs";
 declare module "path";
+declare module "child_process";
 declare module "node:test" {
   const test: any;
   export default test;

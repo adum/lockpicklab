@@ -255,12 +255,27 @@ test("addDecoys appends the configured number of extra cards", () => {
   assert.equal(withDecoys.player.hand[0], "strike");
 });
 
-test("buildPuzzleAttempt keeps required cards in final hand", () => {
+test("buildPuzzleAttempt rejects when required cards are not used", () => {
   const cards = makeSimpleCards();
   const engine = makeSimpleEngine();
   const state = makeGeneratorState(cards, {
     requiredCards: ["ward"],
     playable: [cards.byId.strike, cards.byId.squire],
+    handSize: 2,
+  });
+
+  const attempt = buildPuzzleAttempt(state, cards, engine);
+
+  assert.equal(attempt.puzzle, undefined);
+  assert.equal(attempt.rejection, "required_cards");
+});
+
+test("buildPuzzleAttempt accepts when required cards are used", () => {
+  const cards = makeSimpleCards();
+  const engine = makeSimpleEngine();
+  const state = makeGeneratorState(cards, {
+    requiredCards: ["ward"],
+    playable: [cards.byId.ward, cards.byId.strike],
     handSize: 2,
   });
 

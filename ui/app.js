@@ -1147,6 +1147,10 @@ function stepGenerator(runId = generatorState?.runId) {
       setGeneratorReject(
         `Rejected attempt #${attemptNumber} (used hand below minimum).`
       );
+    } else if (attempt.rejection === "required_cards") {
+      setGeneratorReject(
+        `Rejected attempt #${attemptNumber} (required cards not used).`
+      );
     }
     if (!attempt.puzzle) {
       iterations += 1;

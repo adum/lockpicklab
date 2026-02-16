@@ -238,21 +238,6 @@ function normalizeRequiredCards(requiredCards) {
     }
     return normalized;
 }
-function mergeRequiredCards(hand, requiredCards) {
-    if (requiredCards.length === 0) {
-        return hand;
-    }
-    const existing = new Set(hand);
-    const merged = [...hand];
-    for (const cardId of requiredCards) {
-        if (existing.has(cardId)) {
-            continue;
-        }
-        merged.push(cardId);
-        existing.add(cardId);
-    }
-    return merged;
-}
 function getRepeatSurcharge(def) {
     if (!def?.effects) {
         return 0;
@@ -436,18 +421,22 @@ export function buildPuzzleAttempt(state, cards, engine) {
                 };
             }
         }
-        const withRequired = requiredCards.length > 0
-            ? {
-                ...base,
-                player: {
-                    ...base.player,
-                    hand: mergeRequiredCards(base.player.hand, requiredCards),
-                },
+        if (requiredCards.length > 0) {
+            const used = new Set(base.player.hand);
+            const missing = requiredCards.filter((cardId) => !used.has(cardId));
+            if (missing.length > 0) {
+                return {
+                    hand,
+                    handLabel,
+                    actionCount,
+                    aborted: false,
+                    rejection: "required_cards",
+                };
             }
-            : base;
+        }
         const puzzle = state.decoys > 0
-            ? addDecoys(withRequired, state.rng, state.playable, state.decoys)
-            : withRequired;
+            ? addDecoys(base, state.rng, state.playable, state.decoys)
+            : base;
         const puzzleTypes = new Set(puzzle.player.hand
             .map((cardId) => cards.byId[cardId]?.type)
             .filter((type) => Boolean(type)));
