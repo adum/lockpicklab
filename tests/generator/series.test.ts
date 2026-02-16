@@ -5,6 +5,7 @@ import {
   buildLevelSeries,
   extractPlayedCards,
   extractPlayedSequence,
+  SeriesGenerationError,
   type SeriesLevelRequest,
 } from "../../generator/series";
 
@@ -29,6 +30,13 @@ function makePuzzle(plays: string[]): Puzzle {
       { type: "end" } as const,
     ],
   };
+}
+
+function asSeriesGenerationError(error: unknown): SeriesGenerationError {
+  if (!(error instanceof SeriesGenerationError)) {
+    assert.fail("Expected SeriesGenerationError");
+  }
+  return error as SeriesGenerationError;
 }
 
 test("extractPlayedSequence and extractPlayedCards read solution plays", () => {
@@ -135,27 +143,108 @@ test("buildLevelSeries treats generation errors as retryable attempts", () => {
   assert.equal(result.levels[0].attemptCount, 2);
 });
 
+test("buildLevelSeries emits progress events", () => {
+  const events: string[] = [];
+  buildLevelSeries(
+    {
+      seed: 3,
+      coverageCards: ["spark"],
+      newCardsPerLevel: 1,
+      minUsedCards: 1,
+      targetRounds: [1],
+      maxAttemptsPerLevel: 2,
+    },
+    {
+      generatePuzzle(request) {
+        return makePuzzle(request.requiredCards);
+      },
+      onProgress(event) {
+        events.push(event.type);
+      },
+    }
+  );
+
+  assert.ok(events.includes("level_start"));
+  assert.ok(events.includes("attempt_start"));
+  assert.ok(events.includes("level_success"));
+});
+
 test("buildLevelSeries throws when level cannot be generated", () => {
-  assert.throws(
-    () =>
-      buildLevelSeries(
-        {
-          seed: 7,
-          coverageCards: ["spark", "cleanse"],
-          newCardsPerLevel: 2,
-          minUsedCards: 2,
-          targetRounds: [1, 2],
-          maxAttemptsPerLevel: 2,
+  let thrown: unknown;
+  try {
+    buildLevelSeries(
+      {
+        seed: 7,
+        coverageCards: ["spark", "cleanse"],
+        newCardsPerLevel: 2,
+        minUsedCards: 2,
+        targetRounds: [1, 2],
+        maxAttemptsPerLevel: 2,
+      },
+      {
+        generatePuzzle() {
+          return makePuzzle(["spark"]);
         },
-        {
-          generatePuzzle() {
-            return makePuzzle(["spark"]);
-          },
-          acceptPuzzle() {
-            return true;
-          },
-        }
-      ),
-    /Failed to generate level 1/
+        acceptPuzzle() {
+          return true;
+        },
+      }
+    );
+  } catch (error) {
+    thrown = error;
+  }
+
+  const failure = asSeriesGenerationError(thrown);
+  assert.match(failure.message, /Failed to generate level 1/);
+  assert.equal(failure.context.level, 1);
+  assert.equal(failure.context.maxAttempts, 2);
+  assert.deepEqual(failure.context.requiredCards, ["spark"]);
+  assert.equal(failure.context.neededNewCoverage, 1);
+  assert.equal(failure.context.lastRequest?.level, 1);
+  assert.equal(failure.context.lastRequest?.attempt, 2);
+  assert.equal(failure.context.lastRequest?.minUsedCards, 2);
+  assert.deepEqual(failure.context.attemptStats, {
+    attempted: 4,
+    generateErrors: 0,
+    rejectedMinUsedCards: 4,
+    rejectedCoverage: 0,
+    rejectedRequiredCards: 0,
+    rejectedCustomAccept: 0,
+  });
+});
+
+test("buildLevelSeries tracks generation errors in failure context", () => {
+  let thrown: unknown;
+  try {
+    buildLevelSeries(
+      {
+        seed: 11,
+        coverageCards: ["spark"],
+        newCardsPerLevel: 1,
+        minUsedCards: 1,
+        targetRounds: [1],
+        maxAttemptsPerLevel: 2,
+      },
+      {
+        generatePuzzle() {
+          throw new Error("transient failure");
+        },
+      }
+    );
+  } catch (error) {
+    thrown = error;
+  }
+
+  const failure = asSeriesGenerationError(thrown);
+  assert.equal(failure.context.attemptStats.attempted, 2);
+  assert.equal(failure.context.attemptStats.generateErrors, 2);
+  assert.equal(failure.context.lastError, "transient failure");
+  assert.equal(failure.context.lastRequest?.attempt, 2);
+  assert.equal(failure.context.lastRequest?.requiredCards.length, 1);
+  assert.equal(failure.context.neededNewCoverage, 1);
+  assert.deepEqual(failure.context.requiredCards, ["spark"]);
+  assert.match(
+    failure.message,
+    /Required cards: spark\. Needed new coverage: 1\. Last error: transient failure/
   );
 });

@@ -42,6 +42,7 @@ export interface SeriesBuildDeps {
       playedCards: string[];
     }
   ) => boolean;
+  onProgress?: (event: SeriesProgressEvent) => void;
 }
 
 export interface SeriesBuildResult {
@@ -50,6 +51,80 @@ export interface SeriesBuildResult {
   coveredCards: string[];
   uncoveredCards: string[];
 }
+
+export interface SeriesLevelFailureContext {
+  level: number;
+  maxAttempts: number;
+  requiredCards: string[];
+  neededNewCoverage: number;
+  lastError?: string;
+  lastRequest?: SeriesLevelRequest;
+  attemptStats: {
+    attempted: number;
+    generateErrors: number;
+    rejectedMinUsedCards: number;
+    rejectedCoverage: number;
+    rejectedRequiredCards: number;
+    rejectedCustomAccept: number;
+  };
+}
+
+export class SeriesGenerationError extends Error {
+  readonly context: SeriesLevelFailureContext;
+
+  constructor(message: string, context: SeriesLevelFailureContext) {
+    super(message);
+    this.name = "SeriesGenerationError";
+    this.context = context;
+  }
+}
+
+export type SeriesProgressEvent =
+  | {
+      type: "level_start";
+      level: number;
+      requiredCards: string[];
+      neededNewCoverage: number;
+      maxAttempts: number;
+    }
+  | {
+      type: "level_relax";
+      level: number;
+      requiredCards: string[];
+      neededNewCoverage: number;
+      maxAttempts: number;
+    }
+  | {
+      type: "attempt_start";
+      level: number;
+      attempt: number;
+      request: SeriesLevelRequest;
+      neededNewCoverage: number;
+    }
+  | {
+      type: "attempt_error";
+      level: number;
+      attempt: number;
+      message: string;
+    }
+  | {
+      type: "attempt_reject";
+      level: number;
+      attempt: number;
+      reason:
+        | "min_used_cards"
+        | "coverage"
+        | "required_cards"
+        | "custom_accept";
+    }
+  | {
+      type: "level_success";
+      level: number;
+      attempt: number;
+      newlyCovered: string[];
+      coveredCount: number;
+      totalCoverage: number;
+    };
 
 function uniqueNonEmpty(values: string[]): string[] {
   const seen = new Set<string>();
@@ -147,8 +222,17 @@ export function buildLevelSeries(
     const uncoveredAtLevelStart = coverageOrder.filter((cardId) => !covered.has(cardId));
     let accepted: SeriesLevelRecord | null = null;
     let lastError: string | null = null;
+    let lastRequest: SeriesLevelRequest | undefined;
     let lastRequiredCards: string[] = [];
     let lastNeededNewCoverage = 0;
+    const attemptStats = {
+      attempted: 0,
+      generateErrors: 0,
+      rejectedMinUsedCards: 0,
+      rejectedCoverage: 0,
+      rejectedRequiredCards: 0,
+      rejectedCustomAccept: 0,
+    };
     for (
       let requiredCount = Math.min(requiredPerLevel, uncoveredAtLevelStart.length);
       requiredCount >= 1 && !accepted;
@@ -158,6 +242,16 @@ export function buildLevelSeries(
       const requiredCards = nextRequiredCards(coverageOrder, covered, requiredCount);
       lastRequiredCards = requiredCards;
       lastNeededNewCoverage = neededNewCoverage;
+      deps.onProgress?.({
+        type:
+          requiredCount === Math.min(requiredPerLevel, uncoveredAtLevelStart.length)
+            ? "level_start"
+            : "level_relax",
+        level,
+        requiredCards,
+        neededNewCoverage,
+        maxAttempts: options.maxAttemptsPerLevel,
+      });
 
       for (let attempt = 1; attempt <= options.maxAttemptsPerLevel; attempt += 1) {
         const roundChoice = targetRounds[(level - 1 + attempt - 1) % targetRounds.length];
@@ -169,6 +263,15 @@ export function buildLevelSeries(
           requiredCards,
           minUsedCards: Math.max(minUsedCards, requiredCards.length),
         };
+        lastRequest = request;
+        attemptStats.attempted += 1;
+        deps.onProgress?.({
+          type: "attempt_start",
+          level,
+          attempt,
+          request,
+          neededNewCoverage,
+        });
         let puzzle: Puzzle;
         try {
           puzzle = deps.generatePuzzle(request);
@@ -176,10 +279,24 @@ export function buildLevelSeries(
           const detail =
             error instanceof Error ? error.message : "unknown generation error";
           lastError = detail;
+          attemptStats.generateErrors += 1;
+          deps.onProgress?.({
+            type: "attempt_error",
+            level,
+            attempt,
+            message: detail,
+          });
           continue;
         }
         const playedSequence = extractPlayedSequence(puzzle);
         if (playedSequence.length < request.minUsedCards) {
+          attemptStats.rejectedMinUsedCards += 1;
+          deps.onProgress?.({
+            type: "attempt_reject",
+            level,
+            attempt,
+            reason: "min_used_cards",
+          });
           continue;
         }
         const playedCards = extractPlayedCards(puzzle);
@@ -187,22 +304,51 @@ export function buildLevelSeries(
           (cardId) => coverageOrder.includes(cardId) && !covered.has(cardId)
         );
         if (newlyCovered.length < neededNewCoverage) {
+          attemptStats.rejectedCoverage += 1;
+          deps.onProgress?.({
+            type: "attempt_reject",
+            level,
+            attempt,
+            reason: "coverage",
+          });
           continue;
         }
         if (
           requireRequiredCardsUsed &&
           requiredCards.some((cardId) => !playedCards.includes(cardId))
         ) {
+          attemptStats.rejectedRequiredCards += 1;
+          deps.onProgress?.({
+            type: "attempt_reject",
+            level,
+            attempt,
+            reason: "required_cards",
+          });
           continue;
         }
         if (
           deps.acceptPuzzle &&
           !deps.acceptPuzzle(puzzle, { request, playedSequence, playedCards })
         ) {
+          attemptStats.rejectedCustomAccept += 1;
+          deps.onProgress?.({
+            type: "attempt_reject",
+            level,
+            attempt,
+            reason: "custom_accept",
+          });
           continue;
         }
 
         newlyCovered.forEach((cardId) => covered.add(cardId));
+        deps.onProgress?.({
+          type: "level_success",
+          level,
+          attempt,
+          newlyCovered,
+          coveredCount: covered.size,
+          totalCoverage: coverageOrder.length,
+        });
         accepted = {
           level,
           attemptCount: attempt,
@@ -221,8 +367,17 @@ export function buildLevelSeries(
       const missing =
         lastRequiredCards.length > 0 ? lastRequiredCards.join(", ") : "(none)";
       const suffix = lastError ? ` Last error: ${lastError}` : "";
-      throw new Error(
-        `Failed to generate level ${level} after ${options.maxAttemptsPerLevel} attempts. Required cards: ${missing}. Needed new coverage: ${lastNeededNewCoverage}.${suffix}`
+      throw new SeriesGenerationError(
+        `Failed to generate level ${level} after ${options.maxAttemptsPerLevel} attempts. Required cards: ${missing}. Needed new coverage: ${lastNeededNewCoverage}.${suffix}`,
+        {
+          level,
+          maxAttempts: options.maxAttemptsPerLevel,
+          requiredCards: lastRequiredCards,
+          neededNewCoverage: lastNeededNewCoverage,
+          lastError: lastError ?? undefined,
+          lastRequest,
+          attemptStats,
+        }
       );
     }
     levels.push(accepted);

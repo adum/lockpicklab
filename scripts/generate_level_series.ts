@@ -5,7 +5,13 @@ import { loadCardLibrary } from "../engine/cards";
 import { normalizeState } from "../engine/state";
 import type { Puzzle } from "../engine/types";
 import { solve } from "../solver/solver";
-import { buildLevelSeries, type SeriesLevelRequest } from "../generator/series";
+import {
+  buildLevelSeries,
+  SeriesGenerationError,
+  type SeriesBuildResult,
+  type SeriesLevelRequest,
+  type SeriesProgressEvent,
+} from "../generator/series";
 import { parseArgs } from "./cli";
 
 const DEFAULTS = {
@@ -133,11 +139,187 @@ function parseGeneratedPuzzle(raw: string): Puzzle {
   return JSON.parse(text.slice(start)) as Puzzle;
 }
 
+function truncateText(raw: string, max = 240): string {
+  const text = raw.replace(/\s+/g, " ").trim();
+  if (text.length <= max) {
+    return text;
+  }
+  return `${text.slice(0, max - 1)}…`;
+}
+
+function extractRootError(raw: string): string | null {
+  const lines = raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (lines.length === 0) {
+    return null;
+  }
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    if (lines[i].startsWith("Error:")) {
+      return truncateText(lines[i]);
+    }
+  }
+  return truncateText(lines[lines.length - 1]);
+}
+
+function summarizeChildFailure(stderr: string, stdout: string): string {
+  const stderrRoot = extractRootError(stderr);
+  if (stderrRoot) {
+    return stderrRoot;
+  }
+  const stdoutRoot = extractRootError(stdout);
+  if (stdoutRoot) {
+    return stdoutRoot;
+  }
+  return "unknown error";
+}
+
+function formatSeriesGenerationError(error: SeriesGenerationError): string[] {
+  const stats = error.context.attemptStats;
+  const requiredCards =
+    error.context.requiredCards.length > 0
+      ? error.context.requiredCards.join(", ")
+      : "(none)";
+  const request = error.context.lastRequest;
+  const attemptsSummary = [
+    `${stats.generateErrors} generation error(s)`,
+    `${stats.rejectedMinUsedCards} rejected by min-used-cards`,
+    `${stats.rejectedCoverage} rejected by coverage`,
+    `${stats.rejectedRequiredCards} rejected by required-cards`,
+    `${stats.rejectedCustomAccept} rejected by uniqueness check`,
+  ].join(", ");
+
+  const lines = [
+    `Series generation failed at level ${error.context.level}.`,
+    `Context: required cards=${requiredCards}; needed new coverage=${error.context.neededNewCoverage}; attempts tried=${stats.attempted} (max per requirement set: ${error.context.maxAttempts}).`,
+    `Attempt outcomes: ${attemptsSummary}.`,
+  ];
+
+  if (request) {
+    lines.push(
+      `Last request: seed=${request.seed}, rounds=${request.targetRounds}, min-used-cards=${request.minUsedCards}.`
+    );
+  }
+  if (error.context.lastError) {
+    lines.push(`Last generator error: ${truncateText(error.context.lastError, 320)}.`);
+  }
+
+  if (
+    error.context.lastError &&
+    error.context.lastError.includes("Failed to generate a valid puzzle")
+  ) {
+    lines.push(
+      "Likely cause: current level constraints are too tight for the puzzle generator."
+    );
+    lines.push(
+      "Try increasing --inner-max-attempts or --max-attempts-per-level, lowering --new-cards-per-level, or lowering --min-used-cards."
+    );
+  }
+  if (
+    error.context.lastError &&
+    error.context.lastError.includes("spawn failed") &&
+    error.context.lastError.includes("EPERM")
+  ) {
+    lines.push(
+      "Likely cause: the current environment blocked child-process execution (spawn EPERM)."
+    );
+    lines.push(
+      "Try running outside restricted sandboxing, or run `npm run build` and execute `node dist/scripts/generate_level_series.js` in your normal shell."
+    );
+  }
+
+  lines.push("Set SERIES_DEBUG_STACK=1 to print full stack traces.");
+  return lines;
+}
+
+function reportFatalError(error: unknown): void {
+  const proc = (globalThis as {
+    process?: {
+      env?: Record<string, string | undefined>;
+    };
+  }).process;
+  const debugStacks = proc?.env?.SERIES_DEBUG_STACK === "1";
+
+  if (error instanceof SeriesGenerationError) {
+    formatSeriesGenerationError(error).forEach((line) => console.error(line));
+    if (debugStacks && error.stack) {
+      console.error(error.stack);
+    }
+    return;
+  }
+
+  if (error instanceof Error) {
+    console.error(`Error: ${error.message}`);
+    if (debugStacks && error.stack) {
+      console.error(error.stack);
+    } else {
+      console.error("Set SERIES_DEBUG_STACK=1 to print full stack traces.");
+    }
+    return;
+  }
+
+  console.error(`Error: ${String(error)}`);
+  if (!debugStacks) {
+    console.error("Set SERIES_DEBUG_STACK=1 to print full stack traces.");
+  }
+}
+
 function main() {
   const proc = (globalThis as {
-    process?: { argv?: string[]; execPath?: string };
+    process?: {
+      argv?: string[];
+      execPath?: string;
+      stdout?: { isTTY?: boolean; write?: (value: string) => unknown };
+      exitCode?: number;
+    };
   }).process;
   const argv = proc?.argv ?? [];
+  const stdout = proc?.stdout;
+  const supportsInlineProgress =
+    Boolean(stdout?.isTTY) && typeof stdout?.write === "function";
+  let hasInlineProgress = false;
+
+  function renderInlineProgress(message: string): void {
+    if (!supportsInlineProgress || !stdout?.write) {
+      return;
+    }
+    stdout.write(`\r\u001b[2K${message}`);
+    hasInlineProgress = true;
+  }
+
+  function clearInlineProgress(): void {
+    if (!supportsInlineProgress || !stdout?.write || !hasInlineProgress) {
+      return;
+    }
+    stdout.write("\r\u001b[2K");
+    stdout.write("\n");
+    hasInlineProgress = false;
+  }
+
+  function summarizeProgress(event: SeriesProgressEvent): string {
+    if (event.type === "level_start") {
+      const cards = event.requiredCards.join(", ") || "(none)";
+      return `[series] Level ${event.level} start · require ${cards} · coverage target ${event.neededNewCoverage}`;
+    }
+    if (event.type === "level_relax") {
+      const cards = event.requiredCards.join(", ") || "(none)";
+      return `[series] Level ${event.level} relaxing constraints · require ${cards} · coverage target ${event.neededNewCoverage}`;
+    }
+    if (event.type === "attempt_start") {
+      const cards = event.request.requiredCards.join(", ") || "(none)";
+      return `[series] Level ${event.level} attempt ${event.attempt} · rounds ${event.request.targetRounds} · require ${cards}`;
+    }
+    if (event.type === "attempt_error") {
+      return `[series] Level ${event.level} attempt ${event.attempt} failed to generate`;
+    }
+    if (event.type === "attempt_reject") {
+      return `[series] Level ${event.level} attempt ${event.attempt} rejected (${event.reason})`;
+    }
+    const covered = `${event.coveredCount}/${event.totalCoverage}`;
+    const gained = event.newlyCovered.length > 0 ? event.newlyCovered.join(", ") : "none";
+    return `[series] Level ${event.level} accepted on attempt ${event.attempt} · new ${gained} · covered ${covered}`;
+  }
   const { flags, positional } = parseArgs(argv.slice(2), {
     shortBooleanFlags: ["h", "v"],
   });
@@ -306,81 +488,99 @@ function main() {
   const nodeExec = proc?.execPath ?? "node";
   const minUsedCards = Math.max(minUsedCardsRaw, newCardsPerLevel);
 
-  const result = buildLevelSeries(
-    {
-      seed,
-      coverageCards,
-      newCardsPerLevel,
-      minUsedCards,
-      targetRounds,
-      maxAttemptsPerLevel,
-      levels,
-      requireRequiredCardsUsed: false,
-      requireFullCoverage: true,
-    },
-    {
-      generatePuzzle(request: SeriesLevelRequest): Puzzle {
-        const args = [
-          generatorScriptPath,
-          "--seed",
-          String(request.seed),
-          "--hand-size",
-          String(handSize),
-          "--min-hand-size",
-          String(request.minUsedCards),
-          "--decoys",
-          String(decoys),
-          "--target-rounds",
-          String(request.targetRounds),
-          "--boss-min",
-          String(bossMin),
-          "--boss-max",
-          String(bossMax),
-          "--boss-mods",
-          String(bossMods),
-          "--action-budget",
-          String(actionBudget),
-          "--solver-budget",
-          String(solverBudget),
-          "--max-solutions",
-          String(maxSolutions),
-          "--max-attempts",
-          String(innerMaxAttempts),
-        ];
-        if (request.requiredCards.length > 0) {
-          args.push("--require-cards", request.requiredCards.join(","));
-        }
-        const run = spawnSync(nodeExec, args, {
-          encoding: "utf8",
-        });
-        if (run.error) {
-          throw new Error(
-            `generate_puzzle spawn failed (level ${request.level}, attempt ${request.attempt}): ${run.error.message}`
-          );
-        }
-        if (run.status !== 0) {
-          const stderr = (run.stderr || "").trim();
-          const stdout = (run.stdout || "").trim();
-          throw new Error(
-            `generate_puzzle failed (level ${request.level}, attempt ${request.attempt}): ${
-              stderr || stdout || "unknown error"
-            }`
-          );
-        }
-        return parseGeneratedPuzzle(run.stdout || "");
+  let result: SeriesBuildResult;
+  try {
+    result = buildLevelSeries(
+      {
+        seed,
+        coverageCards,
+        newCardsPerLevel,
+        minUsedCards,
+        targetRounds,
+        maxAttemptsPerLevel,
+        levels,
+        requireRequiredCardsUsed: false,
+        requireFullCoverage: true,
       },
-      acceptPuzzle(puzzle, context): boolean {
-        const normalized = normalizeState({
-          player: puzzle.player,
-          opponent: puzzle.opponent,
-          manaPerRound: puzzle.manaPerRound ?? 0,
-          targetRounds: puzzle.targetRounds ?? context.request.targetRounds,
-        });
-        const solveResult = solve(normalized, cards, { maxWins: 2 });
-        return solveResult.wins.length === 1;
-      },
-    }
-  );
+      {
+        generatePuzzle(request: SeriesLevelRequest): Puzzle {
+          const args = [
+            generatorScriptPath,
+            "--seed",
+            String(request.seed),
+            "--hand-size",
+            String(handSize),
+            "--min-hand-size",
+            String(request.minUsedCards),
+            "--decoys",
+            String(decoys),
+            "--target-rounds",
+            String(request.targetRounds),
+            "--boss-min",
+            String(bossMin),
+            "--boss-max",
+            String(bossMax),
+            "--boss-mods",
+            String(bossMods),
+            "--action-budget",
+            String(actionBudget),
+            "--solver-budget",
+            String(solverBudget),
+            "--max-solutions",
+            String(maxSolutions),
+            "--max-attempts",
+            String(innerMaxAttempts),
+          ];
+          if (request.requiredCards.length > 0) {
+            args.push("--require-cards", request.requiredCards.join(","));
+          }
+          const run = spawnSync(nodeExec, args, {
+            encoding: "utf8",
+          });
+          if (run.error) {
+            throw new Error(
+              `generate_puzzle spawn failed (level ${request.level}, attempt ${request.attempt}): ${run.error.message}`
+            );
+          }
+          if (run.status !== 0) {
+            const stderr = (run.stderr || "").trim();
+            const stdoutText = (run.stdout || "").trim();
+            throw new Error(
+              `generate_puzzle failed (level ${request.level}, attempt ${request.attempt}): ${
+                summarizeChildFailure(stderr, stdoutText)
+              }`
+            );
+          }
+          return parseGeneratedPuzzle(run.stdout || "");
+        },
+        acceptPuzzle(puzzle, context): boolean {
+          const normalized = normalizeState({
+            player: puzzle.player,
+            opponent: puzzle.opponent,
+            manaPerRound: puzzle.manaPerRound ?? 0,
+            targetRounds: puzzle.targetRounds ?? context.request.targetRounds,
+          });
+          const solveResult = solve(normalized, cards, { maxWins: 2 });
+          return solveResult.wins.length === 1;
+        },
+        onProgress(event) {
+          if (supportsInlineProgress) {
+            renderInlineProgress(summarizeProgress(event));
+            return;
+          }
+          if (verbose && event.type === "level_success") {
+            const cardsLabel =
+              event.newlyCovered.length > 0 ? event.newlyCovered.join(", ") : "none";
+            console.log(
+              `[series] Level ${event.level} accepted (attempt ${event.attempt}); new coverage: ${cardsLabel}`
+            );
+          }
+        },
+      }
+    );
+  } finally {
+    clearInlineProgress();
+  }
 
   const levelsOut = result.levels.map((level, index) => {
     const levelId = `level_${String(index + 1).padStart(3, "0")}`;
@@ -458,4 +658,16 @@ function main() {
   console.log(json);
 }
 
-main();
+try {
+  main();
+} catch (error) {
+  reportFatalError(error);
+  const proc = (globalThis as {
+    process?: {
+      exitCode?: number;
+    };
+  }).process;
+  if (proc) {
+    proc.exitCode = 1;
+  }
+}
