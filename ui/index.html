@@ -52,8 +52,26 @@
     <main class="grid">
       <section class="board" id="playboard">
         <div class="side" id="boss-side">
-          <div class="boss-victory" id="boss-victory">Victory</div>
-          <div class="boss-failure" id="boss-failure">Failure</div>
+          <div class="boss-victory" id="boss-victory">
+            <div class="boss-outcome-title">Victory</div>
+            <button
+              class="btn primary boss-outcome-reset"
+              id="boss-victory-reset"
+              type="button"
+            >
+              Try Again
+            </button>
+          </div>
+          <div class="boss-failure" id="boss-failure">
+            <div class="boss-outcome-title">Failure</div>
+            <button
+              class="btn ghost boss-outcome-reset"
+              id="boss-failure-reset"
+              type="button"
+            >
+              Try Again
+            </button>
+          </div>
           <div class="boss-header-row">
             <div class="boss-art">
               <img id="boss-art" src="./assets/boss/toad_dark.jpg" alt="Boss portrait" />

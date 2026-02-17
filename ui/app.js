@@ -396,6 +396,8 @@ const fallbackPuzzle = {
 };
 
 let defaultPuzzle = structuredClone(fallbackPuzzle);
+const DEFAULT_PUZZLE_PATH = "../puzzles/example.json";
+const DEFAULT_SERIES_PATH = "../puzzles/series.json";
 
 function buildClockworkPuzzle(basePuzzle) {
   return {
@@ -430,11 +432,69 @@ function buildPuzzleLibrary(basePuzzle) {
   ];
 }
 
+function extractSeriesLevels(payload) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  if (!Array.isArray(payload.levels)) {
+    return null;
+  }
+  const levels = payload.levels.filter(
+    (entry) => entry && typeof entry === "object"
+  );
+  return levels.length > 0 ? levels : null;
+}
+
+function uniqueEntryId(baseId, usedIds) {
+  const normalized =
+    typeof baseId === "string" && baseId.trim().length > 0
+      ? baseId.trim()
+      : "puzzle";
+  if (!usedIds.has(normalized)) {
+    usedIds.add(normalized);
+    return normalized;
+  }
+  let suffix = 2;
+  let candidate = `${normalized}_${suffix}`;
+  while (usedIds.has(candidate)) {
+    suffix += 1;
+    candidate = `${normalized}_${suffix}`;
+  }
+  usedIds.add(candidate);
+  return candidate;
+}
+
+function buildSeriesPuzzleLibrary(payload) {
+  const levels = extractSeriesLevels(payload);
+  if (!levels) {
+    return null;
+  }
+  const usedIds = new Set();
+  const entries = levels.map((puzzle, index) => {
+    const rawLevel = Number(puzzle?.metadata?.series?.level);
+    const levelNumber =
+      Number.isFinite(rawLevel) && rawLevel >= 1 ? Math.floor(rawLevel) : index + 1;
+    const rawId =
+      typeof puzzle.id === "string" && puzzle.id.trim().length > 0
+        ? puzzle.id.trim()
+        : `level_${String(levelNumber).padStart(3, "0")}`;
+    const id = uniqueEntryId(rawId, usedIds);
+    return {
+      id,
+      label: `Level ${levelNumber} — ${id}`,
+      data: puzzle,
+    };
+  });
+  return entries.length > 0 ? entries : null;
+}
+
 const elements = {
   puzzleSelect: document.getElementById("puzzle-select"),
   puzzleDifficulty: document.getElementById("puzzle-difficulty"),
   puzzleTags: document.getElementById("puzzle-tags"),
   sfxToggle: document.getElementById("sfx-toggle"),
+  bossVictoryReset: document.getElementById("boss-victory-reset"),
+  bossFailureReset: document.getElementById("boss-failure-reset"),
   playboard: document.getElementById("playboard"),
   opponentHealth: document.getElementById("opponent-health"),
   opponentPoison: document.getElementById("opponent-poison"),
@@ -626,7 +686,21 @@ async function loadBossCatalog() {
 
 async function loadDefaultPuzzle() {
   try {
-    const response = await fetch("../puzzles/example.json");
+    const response = await fetch(DEFAULT_SERIES_PATH);
+    if (response.ok) {
+      const loadedSeries = await response.json();
+      const seriesLibrary = buildSeriesPuzzleLibrary(loadedSeries);
+      if (seriesLibrary && seriesLibrary.length > 0) {
+        defaultPuzzle = structuredClone(seriesLibrary[0].data);
+        puzzleLibrary = seriesLibrary;
+        return;
+      }
+    }
+  } catch {
+    // Fall through to single-puzzle default.
+  }
+  try {
+    const response = await fetch(DEFAULT_PUZZLE_PATH);
     if (!response.ok) {
       throw new Error("Default puzzle not found");
     }
@@ -672,7 +746,7 @@ elements.loadExample.addEventListener("click", () => {
   currentPuzzle = structuredClone(defaultPuzzle);
   elements.puzzleJson.value = JSON.stringify(currentPuzzle, null, 2);
   resetState();
-  setStatus("Loaded example puzzle.");
+  setStatus("Loaded default puzzle.");
 });
 
 elements.parseJson.addEventListener("click", () => {
@@ -682,7 +756,19 @@ elements.parseJson.addEventListener("click", () => {
     return;
   }
   try {
-    currentPuzzle = JSON.parse(text);
+    const parsed = JSON.parse(text);
+    const seriesLibrary = buildSeriesPuzzleLibrary(parsed);
+    if (seriesLibrary && seriesLibrary.length > 0) {
+      puzzleLibrary = seriesLibrary;
+      defaultPuzzle = structuredClone(seriesLibrary[0].data);
+      currentPuzzle = structuredClone(seriesLibrary[0].data);
+      elements.puzzleJson.value = JSON.stringify(currentPuzzle, null, 2);
+      populatePuzzleSelect();
+      resetState();
+      setStatus(`Loaded series puzzle list (${seriesLibrary.length} levels).`);
+      return;
+    }
+    currentPuzzle = parsed;
     resetState();
     setStatus("Parsed puzzle JSON.");
   } catch (err) {
@@ -745,6 +831,14 @@ elements.sfxToggle?.addEventListener("click", () => {
   updateSfxToggle();
   setStatus(enabled ? "Sound effects enabled." : "Sound effects muted.");
 });
+
+function handleOutcomeResetClick(event) {
+  event.preventDefault();
+  resetState();
+}
+
+elements.bossVictoryReset?.addEventListener("click", handleOutcomeResetClick);
+elements.bossFailureReset?.addEventListener("click", handleOutcomeResetClick);
 
 elements.genRun.addEventListener("click", () => {
   startGenerator();

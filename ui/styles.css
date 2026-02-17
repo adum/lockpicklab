@@ -1311,13 +1311,11 @@ body::after {
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 16px;
   font-family: var(--display-font);
-  font-size: clamp(2.4rem, 6vw, 4.2rem);
-  color: rgba(227, 86, 86, 0.95);
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
   background: rgba(14, 14, 18, 0.75);
   opacity: 0;
   pointer-events: none;
@@ -1326,25 +1324,35 @@ body::after {
   z-index: 5;
   border-radius: 16px;
   border: 2px solid rgba(227, 86, 86, 0.45);
-  text-shadow: 0 8px 24px rgba(227, 86, 86, 0.35);
+}
+
+.boss-outcome-title {
+  font-size: clamp(2.4rem, 6vw, 4.2rem);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  text-align: center;
 }
 
 .boss-victory.visible {
   opacity: 1;
   transform: scale(1);
+  pointer-events: auto;
+}
+
+.boss-victory .boss-outcome-title {
+  color: rgba(227, 86, 86, 0.95);
+  text-shadow: 0 8px 24px rgba(227, 86, 86, 0.35);
 }
 
 .boss-failure {
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 16px;
   font-family: var(--display-font);
-  font-size: clamp(2.4rem, 6vw, 4.2rem);
-  color: rgba(240, 176, 78, 0.95);
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
   background: rgba(12, 10, 8, 0.75);
   opacity: 0;
   pointer-events: none;
@@ -1353,10 +1361,31 @@ body::after {
   z-index: 5;
   border-radius: 16px;
   border: 2px solid rgba(240, 176, 78, 0.45);
-  text-shadow: 0 8px 24px rgba(240, 176, 78, 0.35);
 }
 
 .boss-failure.visible {
   opacity: 1;
   transform: scale(1);
+  pointer-events: auto;
+}
+
+.boss-failure .boss-outcome-title {
+  color: rgba(240, 176, 78, 0.95);
+  text-shadow: 0 8px 24px rgba(240, 176, 78, 0.35);
+}
+
+.boss-outcome-reset {
+  min-width: 150px;
+  justify-content: center;
+}
+
+@media (max-width: 640px) {
+  .boss-outcome-title {
+    letter-spacing: 0.12em;
+  }
+
+  .boss-outcome-reset {
+    min-width: 128px;
+    padding: 8px 12px;
+  }
 }
