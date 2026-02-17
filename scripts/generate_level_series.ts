@@ -32,6 +32,13 @@ const DEFAULTS = {
   output: "puzzles/series.json",
 } as const;
 
+const EXTREME_RELAXATION = {
+  allowTwoSolutionsAtStage: 20,
+  allowThreeSolutionsAtStage: 60,
+  allowUncappedSolutionsAtStage: 140,
+  softenRequiredCardsAtStage: 220,
+} as const;
+
 const USAGE = `
 Usage:
   node dist/scripts/generate_level_series.js [--options]
@@ -54,6 +61,7 @@ Options:
   --max-solutions <n>           Passed through to generate_puzzle (default: ${DEFAULTS.maxSolutions})
   --inner-max-attempts <n>      Per-call generate_puzzle attempts (default: ${DEFAULTS.innerMaxAttempts})
   --max-attempts-per-level <n>  Series retries per level (default: ${DEFAULTS.maxAttemptsPerLevel})
+  --bounded-relaxation          Stop after bounded relaxation stages instead of retrying forever
   --output <path>               Write combined series JSON (default: ${DEFAULTS.output})
   --output-dir <path>           Also write one JSON file per level
   --verbose                     Print generation progress
@@ -175,6 +183,30 @@ function summarizeChildFailure(stderr: string, stdout: string): string {
   return "unknown error";
 }
 
+function stageMaxSolutions(baseCap: number, stage: number): number {
+  if (!Number.isFinite(baseCap) || baseCap <= 0) {
+    return 0;
+  }
+  if (stage >= EXTREME_RELAXATION.allowUncappedSolutionsAtStage) {
+    return 0;
+  }
+  if (stage >= EXTREME_RELAXATION.allowThreeSolutionsAtStage) {
+    return Math.max(baseCap, 3);
+  }
+  if (stage >= EXTREME_RELAXATION.allowTwoSolutionsAtStage) {
+    return Math.max(baseCap, 2);
+  }
+  return Math.max(1, Math.floor(baseCap));
+}
+
+function stageForceRequiredCards(stage: number): boolean {
+  return stage < EXTREME_RELAXATION.softenRequiredCardsAtStage;
+}
+
+function formatSolutionCap(cap: number): string {
+  return cap <= 0 ? "any" : String(cap);
+}
+
 function formatSeriesGenerationError(error: SeriesGenerationError): string[] {
   const stats = error.context.attemptStats;
   const requiredCards =
@@ -192,7 +224,7 @@ function formatSeriesGenerationError(error: SeriesGenerationError): string[] {
 
   const lines = [
     `Series generation failed at level ${error.context.level}.`,
-    `Context: required cards=${requiredCards}; needed new coverage=${error.context.neededNewCoverage}; attempts tried=${stats.attempted} (max per requirement set: ${error.context.maxAttempts}).`,
+    `Context: stage=${error.context.lastStage} (${error.context.lastStageRelaxation}), required cards=${requiredCards}, needed new coverage=${error.context.neededNewCoverage}, stage min-used-cards=${error.context.lastStageMinUsedCards}, stage target-rounds cap=${error.context.lastStageTargetRoundsCap}, attempts tried=${stats.attempted} (max per stage: ${error.context.maxAttempts}).`,
     `Attempt outcomes: ${attemptsSummary}.`,
   ];
 
@@ -214,6 +246,11 @@ function formatSeriesGenerationError(error: SeriesGenerationError): string[] {
     );
     lines.push(
       "Try increasing --inner-max-attempts or --max-attempts-per-level, lowering --new-cards-per-level, or lowering --min-used-cards."
+    );
+  }
+  if (error.context.lastStage >= EXTREME_RELAXATION.softenRequiredCardsAtStage) {
+    lines.push(
+      "Extreme relaxation is active (required-cards softened, relaxed solution cap), so persistent failure usually means this card is rarely useful in easy boards."
     );
   }
   if (
@@ -300,25 +337,27 @@ function main() {
   function summarizeProgress(event: SeriesProgressEvent): string {
     if (event.type === "level_start") {
       const cards = event.requiredCards.join(", ") || "(none)";
-      return `[series] Level ${event.level} start · require ${cards} · coverage target ${event.neededNewCoverage}`;
+      return `[series] Level ${event.level} stage ${event.stage} (${event.relaxation}) · require ${cards} · need-coverage ${event.neededNewCoverage} · min-used ${event.minUsedCards} · rounds<=${event.targetRoundsCap}`;
     }
     if (event.type === "level_relax") {
       const cards = event.requiredCards.join(", ") || "(none)";
-      return `[series] Level ${event.level} relaxing constraints · require ${cards} · coverage target ${event.neededNewCoverage}`;
+      return `[series] Level ${event.level} stage ${event.stage} (${event.relaxation}) · require ${cards} · need-coverage ${event.neededNewCoverage} · min-used ${event.minUsedCards} · rounds<=${event.targetRoundsCap}`;
     }
     if (event.type === "attempt_start") {
       const cards = event.request.requiredCards.join(", ") || "(none)";
-      return `[series] Level ${event.level} attempt ${event.attempt} · rounds ${event.request.targetRounds} · require ${cards}`;
+      const solutionCap = stageMaxSolutions(maxSolutions, event.stage);
+      const requireMode = stageForceRequiredCards(event.stage) ? "hard" : "soft";
+      return `[series] Level ${event.level} stage ${event.stage} attempt ${event.attempt}/${event.maxStageAttempts} (overall ${event.overallAttempt}) · rounds ${event.request.targetRounds} · require ${cards} · sol<=${formatSolutionCap(solutionCap)} · req-${requireMode}`;
     }
     if (event.type === "attempt_error") {
-      return `[series] Level ${event.level} attempt ${event.attempt} failed to generate`;
+      return `[series] Level ${event.level} stage ${event.stage} attempt ${event.attempt}/${maxAttemptsPerLevel} (overall ${event.overallAttempt}) failed to generate`;
     }
     if (event.type === "attempt_reject") {
-      return `[series] Level ${event.level} attempt ${event.attempt} rejected (${event.reason})`;
+      return `[series] Level ${event.level} stage ${event.stage} attempt ${event.attempt}/${maxAttemptsPerLevel} (overall ${event.overallAttempt}) rejected (${event.reason})`;
     }
     const covered = `${event.coveredCount}/${event.totalCoverage}`;
     const gained = event.newlyCovered.length > 0 ? event.newlyCovered.join(", ") : "none";
-    return `[series] Level ${event.level} accepted on attempt ${event.attempt} · new ${gained} · covered ${covered}`;
+    return `[series] Level ${event.level} accepted on stage ${event.stage}, attempt ${event.attempt} (overall ${event.overallAttempt}) · new ${gained} · covered ${covered}`;
   }
   const { flags, positional } = parseArgs(argv.slice(2), {
     shortBooleanFlags: ["h", "v"],
@@ -349,6 +388,7 @@ function main() {
     "max-solutions",
     "inner-max-attempts",
     "max-attempts-per-level",
+    "bounded-relaxation",
     "output",
     "output-dir",
     "verbose",
@@ -437,6 +477,7 @@ function main() {
     "max-attempts-per-level",
     1
   );
+  const boundedRelaxation = Boolean(pickFlag(flags, ["bounded-relaxation"]));
   const outputPathRaw = pickFlag(flags, ["output"]);
   const outputPath =
     typeof outputPathRaw === "string" && outputPathRaw.trim().length > 0
@@ -497,13 +538,17 @@ function main() {
         newCardsPerLevel,
         minUsedCards,
         targetRounds,
+        maxTargetRounds: 3,
         maxAttemptsPerLevel,
         levels,
         requireRequiredCardsUsed: false,
         requireFullCoverage: true,
+        relaxUntilSuccess: !boundedRelaxation,
       },
       {
         generatePuzzle(request: SeriesLevelRequest): Puzzle {
+          const stagedMaxSolutions = stageMaxSolutions(maxSolutions, request.stage);
+          const forceRequiredCards = stageForceRequiredCards(request.stage);
           const args = [
             generatorScriptPath,
             "--seed",
@@ -527,11 +572,11 @@ function main() {
             "--solver-budget",
             String(solverBudget),
             "--max-solutions",
-            String(maxSolutions),
+            String(stagedMaxSolutions),
             "--max-attempts",
             String(innerMaxAttempts),
           ];
-          if (request.requiredCards.length > 0) {
+          if (forceRequiredCards && request.requiredCards.length > 0) {
             args.push("--require-cards", request.requiredCards.join(","));
           }
           const run = spawnSync(nodeExec, args, {
@@ -560,8 +605,18 @@ function main() {
             manaPerRound: puzzle.manaPerRound ?? 0,
             targetRounds: puzzle.targetRounds ?? context.request.targetRounds,
           });
-          const solveResult = solve(normalized, cards, { maxWins: 2 });
-          return solveResult.wins.length === 1;
+          const stagedMaxSolutions = stageMaxSolutions(maxSolutions, context.request.stage);
+          if (stagedMaxSolutions <= 0) {
+            const solveResult = solve(normalized, cards, { maxWins: 1 });
+            return solveResult.wins.length >= 1;
+          }
+          const solveResult = solve(normalized, cards, {
+            maxWins: stagedMaxSolutions + 1,
+          });
+          return (
+            solveResult.wins.length >= 1 &&
+            solveResult.wins.length <= stagedMaxSolutions
+          );
         },
         onProgress(event) {
           if (supportsInlineProgress) {
@@ -593,6 +648,7 @@ function main() {
           level: index + 1,
           seed: level.request.seed,
           targetRounds: level.request.targetRounds,
+          stage: level.request.stage,
           requiredCards: level.request.requiredCards,
           playedCards: level.playedCards,
           playedSequence: level.playedSequence,
@@ -623,6 +679,9 @@ function main() {
       maxSolutions,
       innerMaxAttempts,
       maxAttemptsPerLevel,
+      maxTargetRounds: 3,
+      relaxUntilSuccess: !boundedRelaxation,
+      extremeRelaxation: EXTREME_RELAXATION,
       coverageCards,
       excludeCards: Array.from(excludeCards),
     },

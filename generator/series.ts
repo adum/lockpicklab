@@ -3,6 +3,7 @@ import type { Puzzle } from "../engine/types";
 export interface SeriesLevelRequest {
   level: number;
   attempt: number;
+  stage: number;
   seed: number;
   targetRounds: number;
   requiredCards: string[];
@@ -26,10 +27,12 @@ export interface SeriesBuildOptions {
   newCardsPerLevel: number;
   minUsedCards: number;
   targetRounds: number[];
+  maxTargetRounds?: number;
   maxAttemptsPerLevel: number;
   levels?: number;
   requireRequiredCardsUsed?: boolean;
   requireFullCoverage?: boolean;
+  relaxUntilSuccess?: boolean;
 }
 
 export interface SeriesBuildDeps {
@@ -55,6 +58,10 @@ export interface SeriesBuildResult {
 export interface SeriesLevelFailureContext {
   level: number;
   maxAttempts: number;
+  lastStage: number;
+  lastStageRelaxation: SeriesStageRelaxation;
+  lastStageMinUsedCards: number;
+  lastStageTargetRoundsCap: number;
   requiredCards: string[];
   neededNewCoverage: number;
   lastError?: string;
@@ -79,25 +86,45 @@ export class SeriesGenerationError extends Error {
   }
 }
 
+export type SeriesStageRelaxation =
+  | "strict_start"
+  | "lower_required_cards"
+  | "lower_min_used_cards"
+  | "increase_target_rounds"
+  | "min_constraints_retry";
+
 export type SeriesProgressEvent =
   | {
       type: "level_start";
       level: number;
+      stage: number;
+      relaxation: SeriesStageRelaxation;
       requiredCards: string[];
+      requiredCardCount: number;
       neededNewCoverage: number;
+      minUsedCards: number;
+      targetRoundsCap: number;
       maxAttempts: number;
     }
   | {
       type: "level_relax";
       level: number;
+      stage: number;
+      relaxation: SeriesStageRelaxation;
       requiredCards: string[];
+      requiredCardCount: number;
       neededNewCoverage: number;
+      minUsedCards: number;
+      targetRoundsCap: number;
       maxAttempts: number;
     }
   | {
       type: "attempt_start";
       level: number;
       attempt: number;
+      overallAttempt: number;
+      stage: number;
+      maxStageAttempts: number;
       request: SeriesLevelRequest;
       neededNewCoverage: number;
     }
@@ -105,12 +132,16 @@ export type SeriesProgressEvent =
       type: "attempt_error";
       level: number;
       attempt: number;
+      overallAttempt: number;
+      stage: number;
       message: string;
     }
   | {
       type: "attempt_reject";
       level: number;
       attempt: number;
+      overallAttempt: number;
+      stage: number;
       reason:
         | "min_used_cards"
         | "coverage"
@@ -121,6 +152,8 @@ export type SeriesProgressEvent =
       type: "level_success";
       level: number;
       attempt: number;
+      overallAttempt: number;
+      stage: number;
       newlyCovered: string[];
       coveredCount: number;
       totalCoverage: number;
@@ -205,12 +238,21 @@ export function buildLevelSeries(
   if (!deps.generatePuzzle) {
     throw new Error("generatePuzzle dependency is required.");
   }
+  const maxTargetRounds =
+    typeof options.maxTargetRounds === "number" &&
+    Number.isFinite(options.maxTargetRounds)
+      ? Math.max(1, Math.floor(options.maxTargetRounds))
+      : 3;
+  const normalizedTargetRounds = uniqueNonEmpty(
+    targetRounds.map((round) => String(Math.min(maxTargetRounds, Math.max(1, round))))
+  ).map((value) => Number(value));
 
   const covered = new Set<string>();
   const levels: SeriesLevelRecord[] = [];
   const requiredPerLevel = Math.max(1, Math.floor(options.newCardsPerLevel));
   const requireRequiredCardsUsed = options.requireRequiredCardsUsed ?? false;
   const requireFullCoverage = options.requireFullCoverage ?? true;
+  const relaxUntilSuccess = options.relaxUntilSuccess ?? false;
   const minUsedCards = Math.max(0, Math.floor(options.minUsedCards));
   const explicitLevels =
     typeof options.levels === "number" && Number.isFinite(options.levels)
@@ -220,11 +262,24 @@ export function buildLevelSeries(
 
   for (let level = 1; level <= levelLimit; level += 1) {
     const uncoveredAtLevelStart = coverageOrder.filter((cardId) => !covered.has(cardId));
+    const strictRequiredCount = Math.min(requiredPerLevel, uncoveredAtLevelStart.length);
+    const minRequiredCount = uncoveredAtLevelStart.length > 0 ? 1 : 0;
+    const minNeededCoverage = uncoveredAtLevelStart.length > 0 ? 1 : 0;
     let accepted: SeriesLevelRecord | null = null;
     let lastError: string | null = null;
     let lastRequest: SeriesLevelRequest | undefined;
     let lastRequiredCards: string[] = [];
-    let lastNeededNewCoverage = 0;
+    let lastNeededNewCoverage = Math.min(
+      strictRequiredCount,
+      uncoveredAtLevelStart.length
+    );
+    let lastStage = 0;
+    let lastStageRelaxation: SeriesStageRelaxation = "strict_start";
+    let lastStageMinUsedCards = Math.max(minUsedCards, strictRequiredCount);
+    let lastStageTargetRoundsCap =
+      normalizedTargetRounds.length > 0
+        ? Math.max(...normalizedTargetRounds)
+        : 1;
     const attemptStats = {
       attempted: 0,
       generateErrors: 0,
@@ -233,42 +288,74 @@ export function buildLevelSeries(
       rejectedRequiredCards: 0,
       rejectedCustomAccept: 0,
     };
-    for (
-      let requiredCount = Math.min(requiredPerLevel, uncoveredAtLevelStart.length);
-      requiredCount >= 1 && !accepted;
-      requiredCount -= 1
-    ) {
+    let stage = 0;
+    let requiredCount = strictRequiredCount;
+    let stageMinUsedCards = Math.max(minUsedCards, strictRequiredCount);
+    let stageTargetRoundsCap = lastStageTargetRoundsCap;
+    let stageRelaxation: SeriesStageRelaxation = "strict_start";
+
+    while (!accepted) {
       const neededNewCoverage = Math.min(requiredCount, uncoveredAtLevelStart.length);
       const requiredCards = nextRequiredCards(coverageOrder, covered, requiredCount);
+      const stageRequestMinUsed = Math.max(stageMinUsedCards, neededNewCoverage);
       lastRequiredCards = requiredCards;
       lastNeededNewCoverage = neededNewCoverage;
+      lastStage = stage;
+      lastStageRelaxation = stageRelaxation;
+      lastStageMinUsedCards = stageRequestMinUsed;
+      lastStageTargetRoundsCap = stageTargetRoundsCap;
       deps.onProgress?.({
-        type:
-          requiredCount === Math.min(requiredPerLevel, uncoveredAtLevelStart.length)
-            ? "level_start"
-            : "level_relax",
+        type: stage === 0 ? "level_start" : "level_relax",
         level,
+        stage,
+        relaxation: stageRelaxation,
         requiredCards,
+        requiredCardCount: requiredCount,
         neededNewCoverage,
+        minUsedCards: stageRequestMinUsed,
+        targetRoundsCap: stageTargetRoundsCap,
         maxAttempts: options.maxAttemptsPerLevel,
       });
 
-      for (let attempt = 1; attempt <= options.maxAttemptsPerLevel; attempt += 1) {
-        const roundChoice = targetRounds[(level - 1 + attempt - 1) % targetRounds.length];
+      for (
+        let stageAttempt = 1;
+        stageAttempt <= options.maxAttemptsPerLevel;
+        stageAttempt += 1
+      ) {
+        const stageRoundChoices: number[] = [];
+        normalizedTargetRounds
+          .filter((round) => round <= stageTargetRoundsCap)
+          .forEach((round) => {
+            if (!stageRoundChoices.includes(round)) {
+              stageRoundChoices.push(round);
+            }
+          });
+        for (let round = 1; round <= stageTargetRoundsCap; round += 1) {
+          if (!stageRoundChoices.includes(round)) {
+            stageRoundChoices.push(round);
+          }
+        }
+        const roundIndex = (level - 1 + stageAttempt - 1 + stage) % stageRoundChoices.length;
+        const roundChoice = stageRoundChoices[roundIndex];
+        const overallAttempt = attemptStats.attempted + 1;
         const request: SeriesLevelRequest = {
           level,
-          attempt,
-          seed: levelSeed(options.seed, level, attempt),
+          attempt: overallAttempt,
+          stage,
+          seed: levelSeed(options.seed, level, overallAttempt),
           targetRounds: roundChoice,
           requiredCards,
-          minUsedCards: Math.max(minUsedCards, requiredCards.length),
+          minUsedCards: stageRequestMinUsed,
         };
         lastRequest = request;
         attemptStats.attempted += 1;
         deps.onProgress?.({
           type: "attempt_start",
           level,
-          attempt,
+          attempt: stageAttempt,
+          overallAttempt,
+          stage,
+          maxStageAttempts: options.maxAttemptsPerLevel,
           request,
           neededNewCoverage,
         });
@@ -283,7 +370,9 @@ export function buildLevelSeries(
           deps.onProgress?.({
             type: "attempt_error",
             level,
-            attempt,
+            attempt: stageAttempt,
+            overallAttempt,
+            stage,
             message: detail,
           });
           continue;
@@ -294,7 +383,9 @@ export function buildLevelSeries(
           deps.onProgress?.({
             type: "attempt_reject",
             level,
-            attempt,
+            attempt: stageAttempt,
+            overallAttempt,
+            stage,
             reason: "min_used_cards",
           });
           continue;
@@ -308,7 +399,9 @@ export function buildLevelSeries(
           deps.onProgress?.({
             type: "attempt_reject",
             level,
-            attempt,
+            attempt: stageAttempt,
+            overallAttempt,
+            stage,
             reason: "coverage",
           });
           continue;
@@ -321,7 +414,9 @@ export function buildLevelSeries(
           deps.onProgress?.({
             type: "attempt_reject",
             level,
-            attempt,
+            attempt: stageAttempt,
+            overallAttempt,
+            stage,
             reason: "required_cards",
           });
           continue;
@@ -334,7 +429,9 @@ export function buildLevelSeries(
           deps.onProgress?.({
             type: "attempt_reject",
             level,
-            attempt,
+            attempt: stageAttempt,
+            overallAttempt,
+            stage,
             reason: "custom_accept",
           });
           continue;
@@ -344,14 +441,16 @@ export function buildLevelSeries(
         deps.onProgress?.({
           type: "level_success",
           level,
-          attempt,
+          stage,
+          attempt: stageAttempt,
+          overallAttempt,
           newlyCovered,
           coveredCount: covered.size,
           totalCoverage: coverageOrder.length,
         });
         accepted = {
           level,
-          attemptCount: attempt,
+          attemptCount: overallAttempt,
           request,
           puzzle,
           playedSequence,
@@ -361,6 +460,34 @@ export function buildLevelSeries(
         };
         break;
       }
+
+      if (accepted) {
+        break;
+      }
+      if (requiredCount > minRequiredCount) {
+        requiredCount -= 1;
+        stage += 1;
+        stageRelaxation = "lower_required_cards";
+        continue;
+      }
+      if (relaxUntilSuccess && stageMinUsedCards > minNeededCoverage) {
+        stageMinUsedCards -= 1;
+        stage += 1;
+        stageRelaxation = "lower_min_used_cards";
+        continue;
+      }
+      if (relaxUntilSuccess && stageTargetRoundsCap < maxTargetRounds) {
+        stageTargetRoundsCap += 1;
+        stage += 1;
+        stageRelaxation = "increase_target_rounds";
+        continue;
+      }
+      if (relaxUntilSuccess) {
+        stage += 1;
+        stageRelaxation = "min_constraints_retry";
+        continue;
+      }
+      break;
     }
 
     if (!accepted) {
@@ -368,10 +495,14 @@ export function buildLevelSeries(
         lastRequiredCards.length > 0 ? lastRequiredCards.join(", ") : "(none)";
       const suffix = lastError ? ` Last error: ${lastError}` : "";
       throw new SeriesGenerationError(
-        `Failed to generate level ${level} after ${options.maxAttemptsPerLevel} attempts. Required cards: ${missing}. Needed new coverage: ${lastNeededNewCoverage}.${suffix}`,
+        `Failed to generate level ${level} after ${attemptStats.attempted} total attempts (${options.maxAttemptsPerLevel} per stage). Required cards: ${missing}. Needed new coverage: ${lastNeededNewCoverage}.${suffix}`,
         {
           level,
           maxAttempts: options.maxAttemptsPerLevel,
+          lastStage,
+          lastStageRelaxation,
+          lastStageMinUsedCards,
+          lastStageTargetRoundsCap,
           requiredCards: lastRequiredCards,
           neededNewCoverage: lastNeededNewCoverage,
           lastError: lastError ?? undefined,
