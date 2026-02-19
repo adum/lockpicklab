@@ -329,3 +329,68 @@ test("buildLevelSeries increases target rounds when other relaxations are exhaus
     [0, 0, 1, 1, 2]
   );
 });
+
+test("buildLevelSeries honors maxRelaxationStages when relax-until-success is enabled", () => {
+  let thrown: unknown;
+  try {
+    buildLevelSeries(
+      {
+        seed: 33,
+        coverageCards: ["spark"],
+        newCardsPerLevel: 1,
+        minUsedCards: 1,
+        targetRounds: [1],
+        maxAttemptsPerLevel: 2,
+        relaxUntilSuccess: true,
+        maxRelaxationStages: 2,
+      },
+      {
+        generatePuzzle() {
+          throw new Error("always fail");
+        },
+      }
+    );
+  } catch (error) {
+    thrown = error;
+  }
+
+  const failure = asSeriesGenerationError(thrown);
+  assert.equal(failure.context.lastStage, 1);
+  assert.equal(failure.context.attemptStats.attempted, 4);
+  assert.equal(failure.context.attemptStats.generateErrors, 4);
+  assert.match(failure.message, /after 4 total attempts/);
+});
+
+test("buildLevelSeries can disable coverage requirements after a cutoff level", () => {
+  const requests: SeriesLevelRequest[] = [];
+  const result = buildLevelSeries(
+    {
+      seed: 51,
+      coverageCards: ["a", "b", "c"],
+      newCardsPerLevel: 1,
+      minUsedCards: 1,
+      targetRounds: [1],
+      maxAttemptsPerLevel: 1,
+      levels: 3,
+      coverageUntilLevel: 1,
+      requireFullCoverage: false,
+    },
+    {
+      generatePuzzle(request) {
+        requests.push(request);
+        if (request.level === 1) {
+          return makePuzzle(["a"]);
+        }
+        return makePuzzle(["filler"]);
+      },
+    }
+  );
+
+  assert.equal(result.levels.length, 3);
+  assert.deepEqual(
+    requests.map((request) => request.requiredCards),
+    [["a"], [], []]
+  );
+  assert.deepEqual(result.coveredCards, ["a"]);
+  assert.deepEqual(result.uncoveredCards, ["b", "c"]);
+});

@@ -29,6 +29,8 @@ export interface SeriesBuildOptions {
   targetRounds: number[];
   maxTargetRounds?: number;
   maxAttemptsPerLevel: number;
+  maxRelaxationStages?: number;
+  coverageUntilLevel?: number;
   levels?: number;
   requireRequiredCardsUsed?: boolean;
   requireFullCoverage?: boolean;
@@ -178,6 +180,9 @@ function nextRequiredCards(
   covered: Set<string>,
   count: number
 ): string[] {
+  if (count <= 0) {
+    return [];
+  }
   const required: string[] = [];
   for (const cardId of coverageOrder) {
     if (covered.has(cardId)) {
@@ -235,6 +240,11 @@ export function buildLevelSeries(
   if (targetRounds.length === 0) {
     throw new Error("At least one targetRounds value is required.");
   }
+  const maxRelaxationStages =
+    typeof options.maxRelaxationStages === "number" &&
+    Number.isFinite(options.maxRelaxationStages)
+      ? Math.max(1, Math.floor(options.maxRelaxationStages))
+      : Number.POSITIVE_INFINITY;
   if (!deps.generatePuzzle) {
     throw new Error("generatePuzzle dependency is required.");
   }
@@ -254,6 +264,11 @@ export function buildLevelSeries(
   const requireFullCoverage = options.requireFullCoverage ?? true;
   const relaxUntilSuccess = options.relaxUntilSuccess ?? false;
   const minUsedCards = Math.max(0, Math.floor(options.minUsedCards));
+  const coverageUntilLevel =
+    typeof options.coverageUntilLevel === "number" &&
+    Number.isFinite(options.coverageUntilLevel)
+      ? Math.max(0, Math.floor(options.coverageUntilLevel))
+      : Number.POSITIVE_INFINITY;
   const explicitLevels =
     typeof options.levels === "number" && Number.isFinite(options.levels)
       ? Math.max(1, Math.floor(options.levels))
@@ -261,10 +276,17 @@ export function buildLevelSeries(
   const levelLimit = explicitLevels ?? coverageOrder.length;
 
   for (let level = 1; level <= levelLimit; level += 1) {
-    const uncoveredAtLevelStart = coverageOrder.filter((cardId) => !covered.has(cardId));
-    const strictRequiredCount = Math.min(requiredPerLevel, uncoveredAtLevelStart.length);
-    const minRequiredCount = uncoveredAtLevelStart.length > 0 ? 1 : 0;
-    const minNeededCoverage = uncoveredAtLevelStart.length > 0 ? 1 : 0;
+    const coverageEnabled = level <= coverageUntilLevel;
+    const uncoveredAtLevelStart = coverageEnabled
+      ? coverageOrder.filter((cardId) => !covered.has(cardId))
+      : [];
+    const strictRequiredCount = coverageEnabled
+      ? Math.min(requiredPerLevel, uncoveredAtLevelStart.length)
+      : 0;
+    const minRequiredCount =
+      coverageEnabled && uncoveredAtLevelStart.length > 0 ? 1 : 0;
+    const minNeededCoverage =
+      coverageEnabled && uncoveredAtLevelStart.length > 0 ? 1 : 0;
     let accepted: SeriesLevelRecord | null = null;
     let lastError: string | null = null;
     let lastRequest: SeriesLevelRequest | undefined;
@@ -295,8 +317,12 @@ export function buildLevelSeries(
     let stageRelaxation: SeriesStageRelaxation = "strict_start";
 
     while (!accepted) {
-      const neededNewCoverage = Math.min(requiredCount, uncoveredAtLevelStart.length);
-      const requiredCards = nextRequiredCards(coverageOrder, covered, requiredCount);
+      const neededNewCoverage = coverageEnabled
+        ? Math.min(requiredCount, uncoveredAtLevelStart.length)
+        : 0;
+      const requiredCards = coverageEnabled
+        ? nextRequiredCards(coverageOrder, covered, requiredCount)
+        : [];
       const stageRequestMinUsed = Math.max(stageMinUsedCards, neededNewCoverage);
       lastRequiredCards = requiredCards;
       lastNeededNewCoverage = neededNewCoverage;
@@ -464,25 +490,34 @@ export function buildLevelSeries(
       if (accepted) {
         break;
       }
-      if (requiredCount > minRequiredCount) {
+      const canAdvanceStage = stage + 1 < maxRelaxationStages;
+      if (requiredCount > minRequiredCount && canAdvanceStage) {
         requiredCount -= 1;
         stage += 1;
         stageRelaxation = "lower_required_cards";
         continue;
       }
-      if (relaxUntilSuccess && stageMinUsedCards > minNeededCoverage) {
+      if (
+        relaxUntilSuccess &&
+        stageMinUsedCards > minNeededCoverage &&
+        canAdvanceStage
+      ) {
         stageMinUsedCards -= 1;
         stage += 1;
         stageRelaxation = "lower_min_used_cards";
         continue;
       }
-      if (relaxUntilSuccess && stageTargetRoundsCap < maxTargetRounds) {
+      if (
+        relaxUntilSuccess &&
+        stageTargetRoundsCap < maxTargetRounds &&
+        canAdvanceStage
+      ) {
         stageTargetRoundsCap += 1;
         stage += 1;
         stageRelaxation = "increase_target_rounds";
         continue;
       }
-      if (relaxUntilSuccess) {
+      if (relaxUntilSuccess && canAdvanceStage) {
         stage += 1;
         stageRelaxation = "min_constraints_retry";
         continue;
